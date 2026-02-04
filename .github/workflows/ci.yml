@@ -39,10 +39,3 @@ jobs:
         working-directory: terraform
         run: terraform validate
 
-      - name: Debug Print Env
-        run: |
-          echo "Cloudflare Token: ${{ secrets.CLOUDFLARE_API_TOKEN }}"
-          echo "AWS Access Key: ${{ secrets.AWS_ACCESS_KEY_ID }}"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
