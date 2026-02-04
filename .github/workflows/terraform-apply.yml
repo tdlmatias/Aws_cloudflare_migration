@@ -53,16 +53,10 @@ jobs:
 
       - name: Terraform apply
         working-directory: terraform
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |
           terraform apply -auto-approve \
-            -var="cloudflare_api_token=${CLOUDFLARE_API_TOKEN}" \
-            -var="cloudflare_account_id=${CLOUDFLARE_ACCOUNT_ID}" \
-            -var="aws_access_key=${AWS_ACCESS_KEY_ID}" \
-            -var="aws_secret_key=${AWS_SECRET_ACCESS_KEY}" \
-            -var="aws_region=${AWS_REGION}"
+            -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+            -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
+            -var="aws_access_key=${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            -var="aws_secret_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+            -var="aws_region=${{ secrets.AWS_REGION }}"
