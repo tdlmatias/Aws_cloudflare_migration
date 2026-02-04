@@ -19,9 +19,7 @@ provider "aws" {
 
 
 provider "cloudflare" {
-  # Remove this line - Cloudflare reads from CLOUDFLARE_API_TOKEN env var
-  # api_token = var.cloudflare_api_token
-  # account_id = var.cloudflare_account_id
+  # api_token will be read from CLOUDFLARE_API_TOKEN environment variable
 }
 
 
@@ -37,11 +35,8 @@ locals {
 resource "cloudflare_zone" "zones" {
   for_each = { for zone in local.zones : zone.name => zone }
 
-  account = {
-    id = var.cloudflare_account_id
-  }
-  name = each.value.name
-
+  account_id = var.cloudflare_account_id
+  zone       = each.value.name
 }
 
 resource "cloudflare_dns_record" "records" {
