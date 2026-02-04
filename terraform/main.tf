@@ -35,12 +35,14 @@ locals {
 resource "cloudflare_zone" "zones" {
   for_each = { for zone in local.zones : zone.name => zone }
 
-  account_id = var.cloudflare_account_id
-  zone       = each.value.name
-  plan       = var.cloudflare_plan
+  account = {
+    id = var.cloudflare_account_id
+  }
+  name = each.value.name
+
 }
 
-resource "cloudflare_record" "records" {
+resource "cloudflare_dns_record" "records" {
   for_each = {
     for record in local.records :
     "${record.zone_name}-${record.name}-${record.type}-${record.value}-${lookup(record, "priority", "")}" => record
@@ -49,7 +51,7 @@ resource "cloudflare_record" "records" {
   zone_id  = cloudflare_zone.zones[each.value.zone_name].id
   name     = each.value.name
   type     = each.value.type
-  value    = each.value.value
+  content  = each.value.value
   ttl      = each.value.ttl
   priority = lookup(each.value, "priority", null)
   proxied  = lookup(each.value, "proxied", false)
