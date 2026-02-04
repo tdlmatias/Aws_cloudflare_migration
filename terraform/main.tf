@@ -39,9 +39,7 @@ resource "cloudflare_zone" "zones" {
     id = var.cloudflare_account_id
   }
   name = each.value.name
-  plan = {
-    name = var.cloudflare_plan
-  }
+
 }
 
 resource "cloudflare_dns_record" "records" {
