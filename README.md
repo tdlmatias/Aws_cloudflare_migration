@@ -31,12 +31,12 @@ From the repo root:
 ```bash
 cd terraform
 terraform init
-terraform apply \
-  -var="cloudflare_api_token=YOUR_REAL_CLOUDFLARE_TOKEN" \
-  -var="cloudflare_account_id=YOUR_ACCOUNT_ID" \
-  -var="aws_access_key=YOUR_AWS_ACCESS_KEY" \
-  -var="aws_secret_key=YOUR_AWS_SECRET_KEY" \
-  -var="aws_region=us-east-1"
+terraform apply -auto-approve \
+  -var="cloudflare_api_token=${CLOUDFLARE_API_TOKEN}" \
+  -var="cloudflare_account_id=${CLOUDFLARE_ACCOUNT_ID}" \
+  -var="aws_access_key=${AWS_ACCESS_KEY_ID}" \
+  -var="aws_secret_key=${AWS_SECRET_ACCESS_KEY}" \
+  -var="aws_region=${AWS_REGION}"
 ```
 
 ## Notes
