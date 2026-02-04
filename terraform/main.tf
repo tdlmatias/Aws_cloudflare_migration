@@ -45,7 +45,7 @@ resource "cloudflare_zone" "zones" {
 resource "cloudflare_dns_record" "records" {
   for_each = {
     for record in local.records :
-    "${record.zone_name}-${record.name}-${record.type}-${record.value}-${lookup(record, \"priority\", \"")}" => record
+     "${record.zone_name}-${record.name}-${record.type}-${record.value}-${lookup(record, \"priority\", \"\")}" => record
   }
 
   zone_id  = cloudflare_zone.zones[each.value.zone_name].id
