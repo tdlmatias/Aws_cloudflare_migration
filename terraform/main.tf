@@ -21,7 +21,7 @@ provider "aws" {
 provider "cloudflare" {
   # Remove this line - Cloudflare reads from CLOUDFLARE_API_TOKEN env var
   # api_token = var.cloudflare_api_token
-  account_id = var.cloudflare_account_id
+  # account_id = var.cloudflare_account_id
 }
 
 
