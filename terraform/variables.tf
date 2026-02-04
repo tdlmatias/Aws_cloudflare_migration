@@ -2,15 +2,6 @@ variable "cloudflare_api_token" {
   type        = string
   description = "Cloudflare API token with permissions to manage zones and DNS records."
   sensitive   = true
-  nullable    = true
-
-  validation {
-    condition = var.cloudflare_api_token == null || (
-      length(var.cloudflare_api_token) == 40 &&
-      can(regex("^[A-Za-z0-9_-]+$", var.cloudflare_api_token))
-    )
-    error_message = "cloudflare_api_token must be a 40-character API token using only letters, numbers, hyphens, and underscores."
-  }
 }
 
 variable "cloudflare_account_id" {

@@ -39,10 +39,6 @@ terraform apply \
   -var="aws_region=us-east-1"
 ```
 
-Note: `cloudflare_api_token` must be a real 40-character token; placeholders like `cloudflare-api-token`
-will fail validation. You can also export it as `TF_VAR_cloudflare_api_token` to avoid passing it on
-the command line.
-
 ## Notes
 - `alias-records.json` should be reviewed and translated to the Cloudflare equivalent (often CNAME
   or provider-specific configuration).
