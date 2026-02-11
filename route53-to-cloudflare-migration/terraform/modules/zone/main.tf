@@ -1,5 +1,6 @@
 resource  "cloudflare_zone" "zone" {
-    zone = var.zone_name
+    account_id  = var.account_id  # you may need to pass this in
+    zone        = var.zone_name
 }
 
 resource "cloudflare_record" "dns_records" {
