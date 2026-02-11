@@ -19,9 +19,10 @@ locals {
 module "zones" {
   for_each = local.domains
 
-  source = "./modules/zone"
+  source = "./modules/zones"
 
   account_id = var.cloudflare_account_id
   zone_name  = each.key
   records    = each.value.records
 }
+
