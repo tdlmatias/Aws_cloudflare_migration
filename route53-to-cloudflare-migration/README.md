@@ -24,19 +24,35 @@ Designed for DevOps teams managing multiple production domains.
 
 ## 🏗 Architecture
 
-Route53 (Source) │ │ boto3 extraction ▼ Intermediate JSON (data/) │ │
+Route53 (Source) │ │ 
+boto3 extraction ▼ Intermediate JSON (data/) │ │
 Terraform modules ▼ Cloudflare (Target)
 
 ------------------------------------------------------------------------
 
 ## 📂 Project Structure
 
-route53-to-cloudflare-migration/ ├── extract/ │ └──
-export_route53_to_json.py ├── terraform/ │ ├── main.tf │ ├──
-variables.tf │ ├── modules/ │ │ └── zone/ │ └── terraform.tfvars ├──
-data/ │ └── domains.json ├── scripts/ │ └── run_all.sh ├── logs/ │ └──
-migration.log ├── .github/ │ └── workflows/ │ └── migrate_dns.yml └──
-README.md
+```console
+route53-to-cloudflare-migration/
+├── extract/
+│   └── export_route53_to_json.py
+├── terraform/
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── modules/
+│   │   └── zone/
+│   └── terraform.tfvars
+├── data/
+│   └── domains.json
+├── scripts/
+│   └── run_all.sh
+├── logs/
+│   └── migration.log
+├── .github/
+│   └── workflows/
+│       └── migrate_dns.yml
+└── README.md
+```
 
 ------------------------------------------------------------------------
 
