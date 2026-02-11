@@ -12,10 +12,10 @@ provider "cloudflare" {
 }
 
 locals {
-    domains = jsondecode(file("${path.modules}/../data/domains.json"))
+    domains = jsondecode(file("${path.module}/../data/domains.json"))
 }
 
-modules "zones" {
+module "zones" {
     for_each = local.domains
 
     source = "./modules/zones"
