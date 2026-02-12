@@ -14,6 +14,43 @@ manual review because Route53 aliases do not map 1:1 to Cloudflare.
 - Terraform 1.14.0 (aligned with CI and local validation workflows).
 - Cloudflare API token with Zone and DNS edit permissions.
 
+## Project Estructure
+From project folder and files
+
+```.
+├── LICENSE
+├── README.md
+├── route53-to-cloudflare-migration
+│   ├── README.md
+│   ├── data
+│   │   └── domain.json
+│   ├── extract
+│   │   └── export_route53_to_json.py
+│   ├── logs
+│   │   └── migration.log
+│   ├── scripts
+│   │   └── run_all.sh
+│   └── terraform
+│       ├── main.tf
+│       ├── modules
+│       │   └── zones
+│       │       ├── main.tf
+│       │       ├── output.tf
+│       │       ├── variables.tf
+│       │       └── version.tf
+│       ├── terraform.tfvars
+│       └── variables.tf
+├── scripts
+│   ├── export_route53.sh
+│   └── route53_to_cloudflare.py
+└── terraform
+    ├── data
+    │   └── zones.json
+    ├── main.tf
+    ├── terraform.tfvars
+    └── variables.tf
+```
+
 ## Export Route53 data
 From the repo root:
 
