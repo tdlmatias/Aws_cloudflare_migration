@@ -12,7 +12,8 @@ provider "cloudflare" {
 }
 
 locals {
-  domains = jsondecode(file("${path.module}/../data/domains.json"))
+  domains_file = fileexists("${path.module}/../data/domains.json") ? "${path.module}/../data/domains.json" : "${path.module}/../data/domain.json"
+  domains      = jsondecode(file(local.domains_file))
 }
 
 module "zones" {
@@ -20,6 +21,8 @@ module "zones" {
 
   source = "./modules/zones"
 
-  zone_name = each.key
-  records   = each.value.records
+  account_id = var.cloudflare_account_id
+  zone_name  = each.key
+  records    = each.value.records
 }
+
