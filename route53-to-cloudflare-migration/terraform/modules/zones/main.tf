@@ -35,29 +35,3 @@ resource "cloudflare_dns_record" "dns_records" {
   comment  = try(each.value.comment, null)
   tags     = try(each.value.tags, null)
 }
-
-/* resource "cloudflare_dns_record" "dns_records" {
-  for_each = { 
-    for idx, record in var.records :
-    //"${record.name}-${record.type}" => record
-    "${idx}-${try(record.type, "UNK")}-${try(record.name, "null")}" => record
-  }
-
-  //zone_id = cloudflare_zone.zone.id
-  zone_id = cloudflare_zone.zone.id
-  name    = each.value.name
-  type    = each.value.type
-
-  //value   = each.value.content
-  content = coalesce(
-    try(each.value.content, null),
-    try(each.value.value, null)
-  )
-
-  ttl     = try(each.value.ttl, 1)
-  proxied = try(each.value.proxied, null)
-
-  priority = try(each.value.priority, null)
-  comment  = try(each.value.comment, null)
-  tags     = try(each.value.tags, null)
-} */
