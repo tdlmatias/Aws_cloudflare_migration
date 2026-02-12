@@ -3,8 +3,8 @@
     {
       "name": "example.com",
       "records": [
-        { "name": "@", "type": "A", "value": "192.0.2.1", "ttl": 3600, "proxied": false },
-        { "name": "www", "type": "CNAME", "value": "@", "ttl": 3600, "proxied": false }
+        { "name": "@", "type": "A", "content": "192.0.2.1", "ttl": 3600, "proxied": false },
+        { "name": "www", "type": "CNAME", "content": "@", "ttl": 3600, "proxied": false }
       ]
     }
   ]

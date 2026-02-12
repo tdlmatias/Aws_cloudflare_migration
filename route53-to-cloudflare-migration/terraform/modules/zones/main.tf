@@ -15,5 +15,5 @@ resource "cloudflare_record" "dns_records" {
   type    = each.value.type
   value   = each.value.content
   ttl     = each.value.ttl
-  proxied = false
+  proxied = lookup(each.value, "proxied", false)
 }
