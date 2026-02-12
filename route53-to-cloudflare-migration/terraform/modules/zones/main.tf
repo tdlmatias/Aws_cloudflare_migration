@@ -1,19 +1,63 @@
 
 resource "cloudflare_zone" "zone" {
-  account_id = var.account_id # you may need to pass this in
-  zone       = var.zone_name
+  account = {
+    id = var.account_id
+  } # you may need to pass this in
+  name = var.zone_name
 }
 
-resource "cloudflare_record" "dns_records" {
-  for_each = {
+locals {
+  records_map = {
     for idx, record in var.records :
-    "${record.name}-${record.type}" => record
+    "${idx}-${try(record.type, "UNK")}-${try(record.name, "noname")}" => record
+  }
+}
+
+resource "cloudflare_dns_record" "dns_records" {
+  for_each = local.records_map
+
+  # ✅ correct: reference the resource, not a var.*
+  zone_id = cloudflare_zone.zone.id
+
+  name = each.value.name
+  type = each.value.type
+
+  # v5 uses `content` (not `value`)
+  content = coalesce(
+    try(each.value.content, null),
+    try(each.value.value, null)
+  )
+
+  ttl     = try(each.value.ttl, 1)
+  proxied = try(each.value.proxied, null)
+
+  priority = try(each.value.priority, null)
+  comment  = try(each.value.comment, null)
+  tags     = try(each.value.tags, null)
+}
+
+/* resource "cloudflare_dns_record" "dns_records" {
+  for_each = { 
+    for idx, record in var.records :
+    //"${record.name}-${record.type}" => record
+    "${idx}-${try(record.type, "UNK")}-${try(record.name, "null")}" => record
   }
 
+  //zone_id = cloudflare_zone.zone.id
   zone_id = cloudflare_zone.zone.id
   name    = each.value.name
   type    = each.value.type
-  value   = each.value.content
-  ttl     = each.value.ttl
-  proxied = lookup(each.value, "proxied", false)
-}
+
+  //value   = each.value.content
+  content = coalesce(
+    try(each.value.content, null),
+    try(each.value.value, null)
+  )
+
+  ttl     = try(each.value.ttl, 1)
+  proxied = try(each.value.proxied, null)
+
+  priority = try(each.value.priority, null)
+  comment  = try(each.value.comment, null)
+  tags     = try(each.value.tags, null)
+} */
