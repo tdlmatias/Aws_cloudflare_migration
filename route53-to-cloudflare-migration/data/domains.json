@@ -1,0 +1,28 @@
+{
+  "example.com": {
+    "records": [
+      {
+        "type": "A",
+        "name": "example.com",
+        "content": "192.0.2.1",
+        "ttl": 300
+      },
+      {
+        "type": "MX",
+        "name": "example.com",
+        "content": "10 mail.example.com",
+        "ttl": 300
+      }
+    ]
+  },
+  "anotherdomain.net": {
+    "records": [
+      {
+        "type": "CNAME",
+        "name": "www",
+        "content": "example.com",
+        "ttl": 300
+      }
+    ]
+  }
+}

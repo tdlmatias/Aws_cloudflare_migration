@@ -20,7 +20,7 @@ jobs:
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.6.6"
+          terraform_version: "1.14.0"
 
       - name: Validate shell scripts
         run: bash -n scripts/export_route53.sh
