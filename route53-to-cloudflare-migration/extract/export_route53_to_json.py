@@ -24,7 +24,7 @@ def get_dns_records(zone_id):
         records.extend(page['ResourceRecordSets'])
     return records
 
-def transform_record(record):
+def transform_records(records):
     cf_records = []
     for record in records:
         if record['Type'] in ['NS', 'SOA']:
@@ -42,9 +42,13 @@ def transform_record(record):
             
         if record['Type'] == 'MX':
             values = [f"{r['Priority']} {r['Value']}" for r in record['ResourceRecords']] # Sort MX records by priority
-            
+
+        # Skip records with no values
+        if not values:
+            continue
+
         entry['content'] = values if len(values) > 1 else values[0]
-        
+
         cf_records.append(entry)
     return cf_records
 
@@ -68,7 +72,7 @@ def main():
         
         try:
             records = get_dns_records(zone['Id'])
-            transformed = transform_record(records)
+            transformed = transform_records(records)
             write_to_json(domain_name, transformed)
             logging.info(f"✅ Exported {len(transformed)} records for {domain_name}")
         except ClientError as e:
