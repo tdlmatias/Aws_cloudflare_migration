@@ -79,7 +79,7 @@ Environment variable: CLOUDFLARE_API_TOKEN
 ### Installed Tools
 
 -   Python 3.10+
--   Terraform 1.5+
+-   Terraform 1.14.0
 -   pip
 -   Git
 
