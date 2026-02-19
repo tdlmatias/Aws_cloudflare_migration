@@ -1,0 +1,2 @@
+# Python dependencies for Route53 to Cloudflare DNS migration
+boto3>=1.34.0
