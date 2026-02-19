@@ -66,15 +66,24 @@ This writes:
 From the repo root:
 
 ```bash
+# Export AWS credentials via environment variables (used by AWS credential chain)
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_REGION="us-east-1"
+
+# Export Cloudflare credentials
+export CLOUDFLARE_API_TOKEN="your-cloudflare-token"
+export CLOUDFLARE_ACCOUNT_ID="your-account-id"
+
 cd terraform
 terraform init
 terraform apply -auto-approve \
   -var="cloudflare_api_token=${CLOUDFLARE_API_TOKEN}" \
   -var="cloudflare_account_id=${CLOUDFLARE_ACCOUNT_ID}" \
-  -var="aws_access_key=${AWS_ACCESS_KEY_ID}" \
-  -var="aws_secret_key=${AWS_SECRET_ACCESS_KEY}" \
   -var="aws_region=${AWS_REGION}"
 ```
+
+**Security Note:** Terraform now uses the standard AWS credential chain instead of passing credentials through variables. This prevents credential exposure in state files and logs. Set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as environment variables, or use AWS instance profiles/OIDC for better security.
 
 ## Notes
 - `alias-records.json` should be reviewed and translated to the Cloudflare equivalent (often CNAME
