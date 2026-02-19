@@ -35,7 +35,7 @@ jobs:
     
 
       - name: Extract DNS records from Route 53
-        run: python3 extract/export_route53_to_json.py
+        run: python3 route53-to-cloudflare-migration/extract/export_route53_to_json.py
 
       - name: Run Terraform 
         run: |
