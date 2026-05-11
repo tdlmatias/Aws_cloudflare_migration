@@ -6,7 +6,10 @@ python3 extract/export_route53_to_json.py
 
 
 echo "Generating Terraform files"
-cp data/*.json terraform/data/
+mkdir -p terraform/data
+if compgen -G "data/*.json" > /dev/null; then
+  cp data/*.json terraform/data/
+fi
 
 cd terraform
 
