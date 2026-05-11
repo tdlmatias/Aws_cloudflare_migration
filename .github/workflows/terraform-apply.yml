@@ -39,8 +39,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Verify required secrets are present
+        run: |
+          missing=()
+          [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]       && missing+=("AWS_ACCESS_KEY_ID")
+          [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]   && missing+=("AWS_SECRET_ACCESS_KEY")
+          [ -z "${{ secrets.AWS_REGION }}" ]              && missing+=("AWS_REGION")
+          [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]    && missing+=("CLOUDFLARE_API_TOKEN")
+          [ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]   && missing+=("CLOUDFLARE_ACCOUNT_ID")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

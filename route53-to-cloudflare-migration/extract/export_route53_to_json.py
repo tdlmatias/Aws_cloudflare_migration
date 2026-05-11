@@ -5,7 +5,8 @@ import logging
 from botocore.exceptions import ClientError
 
 # Logging setup
-logging.basicConfig(filename='logs/migrating.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+os.makedirs('logs', exist_ok=True)
+logging.basicConfig(filename='logs/migration.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # AWS client setup
 route53_client = boto3.client('route53')
@@ -47,9 +48,11 @@ def transform_records(records):
         if not values:
             continue
 
-        entry['content'] = values if len(values) > 1 else values[0]
-
-        cf_records.append(entry)
+        # Each Cloudflare record expects a single scalar content value,
+        # so split multi-value records (e.g. round-robin A records) into
+        # one record per value.
+        for value in values:
+            cf_records.append({**entry, 'content': value})
     return cf_records
 
 

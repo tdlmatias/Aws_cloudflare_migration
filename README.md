@@ -11,10 +11,10 @@ manual review because Route53 aliases do not map 1:1 to Cloudflare.
 ## Prerequisites
 - AWS CLI authenticated to the AWS account hosting the Route53 zones.
 - `jq` and `python3`.
-- Terraform 1.14.0 (aligned with CI and local validation workflows).
+- Terraform ~> 1.9.0 (aligned with CI and local validation workflows).
 - Cloudflare API token with Zone and DNS edit permissions.
 
-## Project Estructure
+## Project Structure
 From project folder and files
 
 ```.
