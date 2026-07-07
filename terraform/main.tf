@@ -26,7 +26,9 @@ locals {
     ]
   ])
 
-  # Deterministic, collision-detecting map key for DNS records.
+  # Deterministic, collision-detecting map key for DNS records. priority is
+  # nullable (present-but-null for non-MX records), so it is normalised to an
+  # empty string before joining rather than passed to join() as null.
   record_map = {
     for record in local.records :
     join("|", [
@@ -34,7 +36,7 @@ locals {
       record.name,
       record.type,
       tostring(record.content),
-      tostring(lookup(record, "priority", "")),
+      lookup(record, "priority", null) == null ? "" : tostring(record.priority),
     ]) => record
   }
 }
