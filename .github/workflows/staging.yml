@@ -1,0 +1,48 @@
+name: STAGING
+
+# Satisfies the branch-protection rule "Require deployments to succeed before
+# merging" for the STAGING environment. It runs on pull requests to main and
+# performs non-destructive Terraform validation only (no apply, no secrets),
+# so the STAGING deployment reliably succeeds without touching infrastructure.
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  staging:
+    name: Validate (STAGING)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The `environment:` key is what registers a STAGING deployment for the gate.
+    environment: STAGING
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init (no backend)
+        working-directory: terraform
+        run: terraform init -backend=false -input=false
+
+      - name: Terraform validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform test (mock providers)
+        working-directory: terraform
+        run: terraform test
