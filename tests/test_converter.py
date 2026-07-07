@@ -204,6 +204,28 @@ def test_private_zone_included_when_allowed(fixture_dir) -> None:
             "ResourceRecordSets"
         ],
     }
+
+    result = convert_hosted_zones(hosted, records, allow_private_zones=True)
+    zone_names = {z["name"] for z in result.zones}
+
+    assert "internal.example" in zone_names
+    assert not any(
+        r["reason"] == "private_hosted_zone" for r in result.review_records
+    )
+
+
+def test_private_zone_included_when_allowed(fixture_dir) -> None:
+    from migration.io import read_json
+
+    hosted = read_json(fixture_dir / "hosted-zones.json")["HostedZones"]
+    records = {
+        "Z1PUBLIC0000000000": read_json(fixture_dir / "records-Z1PUBLIC0000000000.json")[
+            "ResourceRecordSets"
+        ],
+        "Z2PRIVATE000000000": read_json(fixture_dir / "records-Z2PRIVATE000000000.json")[
+            "ResourceRecordSets"
+        ],
+    }
     result = convert_hosted_zones(hosted, records, allow_private_zones=True)
     zone_names = {z["name"] for z in result.zones}
     assert "internal.example" in zone_names
