@@ -1,0 +1,14 @@
+{
+  "HostedZones": [
+    {
+      "Id": "/hostedzone/Z1PUBLIC0000000000",
+      "Name": "example.com.",
+      "Config": { "PrivateZone": false }
+    },
+    {
+      "Id": "/hostedzone/Z2PRIVATE000000000",
+      "Name": "internal.example.",
+      "Config": { "PrivateZone": true }
+    }
+  ]
+}

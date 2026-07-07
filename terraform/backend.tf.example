@@ -1,0 +1,20 @@
+# Remote state example. Terraform state for this project contains the Cloudflare
+# zone/record graph and MUST be stored in an encrypted, locked, access-controlled
+# backend for any shared or production use. Local state is only acceptable for
+# throwaway experimentation.
+#
+# To enable: copy to backend.tf, fill in real values, then run `terraform init`.
+#
+# S3 + native state locking (Terraform >= 1.10 supports use_lockfile; for older
+# versions use a DynamoDB lock table instead).
+
+terraform {
+  backend "s3" {
+    bucket       = "REPLACE_WITH_STATE_BUCKET"
+    key          = "aws-cloudflare-migration/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
+    # dynamodb_table = "REPLACE_WITH_LOCK_TABLE"  # for Terraform < 1.10
+  }
+}

@@ -1,0 +1,60 @@
+flowchart TB
+    subgraph AWS["AWS (source)"]
+        R53[(Route53 hosted zones)]
+        AWSAUTH[AWS auth: OIDC read-only role]
+    end
+
+    subgraph LOCAL["Local / CI migration tooling"]
+        EXPORT[export_route53.sh<br/>AWS CLI list-hosted-zones<br/>+ list-resource-record-sets]
+        CONVERT[migration.converter<br/>normalise + validate]
+        SCHEMA{{schemas/zones.schema.json<br/>schemas/review.schema.json}}
+        ZONES[/terraform/data/zones.json/]
+        REVIEW[/manual-review.json<br/>alias + unsupported features/]
+    end
+
+    subgraph GHA["GitHub Actions"]
+        CI[ci.yml<br/>ruff, mypy, pytest, shellcheck,<br/>tf fmt/validate/test]
+        PLAN[terraform-plan.yml<br/>non-destructive plan + artifact]
+        SEC[security.yml<br/>gitleaks + checkov]
+        APPLY[[terraform-apply.yml<br/>workflow_dispatch<br/>protected environment]]
+    end
+
+    subgraph TFSTATE["Terraform state"]
+        STATE[(Encrypted S3 backend<br/>state locking)]
+    end
+
+    subgraph CF["Cloudflare (target)"]
+        CFAPI[Cloudflare API]
+        CFZONES[(Cloudflare zones)]
+        CFRECORDS[(Cloudflare DNS records)]
+    end
+
+    subgraph REG["Domain registrar"]
+        NS[Nameserver delegation]
+    end
+
+    subgraph OBS["Validation & observability"]
+        VERIFY[DNS verification<br/>dig / record diff]
+        ARTIFACTS[Plan + export artifacts<br/>job summaries]
+        ROLLBACK[[Rollback: keep Route53<br/>revert nameservers]]
+    end
+
+    AWSAUTH --> EXPORT
+    R53 --> EXPORT --> CONVERT
+    SCHEMA -.validates.-> CONVERT
+    CONVERT --> ZONES
+    CONVERT --> REVIEW
+
+    ZONES --> CI
+    ZONES --> PLAN
+    CI --> ARTIFACTS
+    PLAN --> ARTIFACTS
+    SEC --> ARTIFACTS
+    PLAN --> APPLY
+    APPLY <--> STATE
+    APPLY --> CFAPI --> CFZONES --> CFRECORDS
+
+    CFRECORDS --> VERIFY
+    VERIFY --> NS
+    NS -.rollback.-> ROLLBACK
+    ROLLBACK -.->|revert| R53

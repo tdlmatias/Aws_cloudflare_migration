@@ -8,6 +8,12 @@
         { "name": "@", "type": "MX", "content": "mail.example.com", "ttl": 3600, "priority": 10, "proxied": false },
         { "name": "www", "type": "CNAME", "content": "example.com", "ttl": 3600, "priority": null, "proxied": false }
       ]
+    },
+    {
+      "name": "example.net",
+      "records": [
+        { "name": "@", "type": "A", "content": "198.51.100.5", "ttl": 300, "priority": null, "proxied": true }
+      ]
     }
   ]
 }

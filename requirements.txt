@@ -1,0 +1,6 @@
+# Convenience runtime pin for environments that install via requirements.txt.
+# pyproject.toml is the source of truth for dependencies; keep this in sync with
+# the [project].dependencies list there (or install with `pip install -e .`).
+jsonschema>=4.0
+# Optional: only needed for the boto3-based export path (see docs).
+# boto3>=1.34

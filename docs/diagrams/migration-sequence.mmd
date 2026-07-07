@@ -1,0 +1,48 @@
+sequenceDiagram
+    autonumber
+    actor Eng as Engineer
+    participant AWS as Route53
+    participant Tool as migration tooling
+    participant Repo as Git repo / PR
+    participant GHA as GitHub Actions
+    participant CF as Cloudflare
+    participant Reg as Registrar
+    participant DNS as Public DNS
+
+    Note over Eng,DNS: 1. Preflight
+    Eng->>AWS: Lower record TTLs (e.g. 300s) ahead of cutover
+    Eng->>Tool: Confirm tooling installed, credentials scoped read-only
+
+    Note over Eng,Repo: 2-4. Export, normalise, validate
+    Eng->>AWS: export_route53.sh (list zones + record sets)
+    AWS-->>Tool: hosted-zones.json + records-*.json
+    Tool->>Tool: convert + JSON Schema validation
+    Tool-->>Repo: zones.json + manual-review.json
+    Eng->>Repo: Open PR; resolve manual-review items
+
+    Note over GHA: 5. Plan
+    Repo->>GHA: CI + terraform-plan
+    GHA-->>Repo: Reviewable plan artifact
+
+    Note over Eng,GHA: 6-7. Human review + protected apply
+    Eng->>GHA: Review plan, count records
+    Eng->>GHA: workflow_dispatch terraform-apply (confirm=apply)
+    GHA->>GHA: Protected environment approval
+    GHA->>CF: terraform apply (create zones + records)
+    CF-->>GHA: zone ids + Cloudflare nameservers
+
+    Note over Eng,DNS: 8. DNS verification (pre-cutover)
+    Eng->>CF: Query Cloudflare NS directly; diff vs Route53
+    CF-->>Eng: Records match source
+
+    Note over Eng,Reg: 9. Registrar cutover
+    Eng->>Reg: Replace Route53 NS with Cloudflare NS
+    Reg-->>DNS: Delegation propagates
+
+    Note over Eng,DNS: 10. Rollback decision
+    Eng->>DNS: Monitor resolution + application health
+    alt Healthy
+        Eng->>AWS: Keep Route53 for rollback window, then decommission
+    else Problem detected
+        Eng->>Reg: Revert NS to Route53 (still authoritative)
+    end

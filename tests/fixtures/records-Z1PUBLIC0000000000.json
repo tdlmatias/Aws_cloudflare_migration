@@ -1,0 +1,116 @@
+{
+  "ResourceRecordSets": [
+    {
+      "Name": "example.com.",
+      "Type": "SOA",
+      "TTL": 900,
+      "ResourceRecords": [
+        { "Value": "ns-1.awsdns-00.org. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400" }
+      ]
+    },
+    {
+      "Name": "example.com.",
+      "Type": "NS",
+      "TTL": 172800,
+      "ResourceRecords": [
+        { "Value": "ns-1.awsdns-00.org." },
+        { "Value": "ns-2.awsdns-00.co.uk." }
+      ]
+    },
+    {
+      "Name": "example.com.",
+      "Type": "A",
+      "TTL": 300,
+      "ResourceRecords": [
+        { "Value": "192.0.2.1" },
+        { "Value": "192.0.2.2" }
+      ]
+    },
+    {
+      "Name": "example.com.",
+      "Type": "AAAA",
+      "TTL": 300,
+      "ResourceRecords": [{ "Value": "2001:db8::1" }]
+    },
+    {
+      "Name": "www.example.com.",
+      "Type": "CNAME",
+      "TTL": 3600,
+      "ResourceRecords": [{ "Value": "example.com." }]
+    },
+    {
+      "Name": "*.example.com.",
+      "Type": "A",
+      "TTL": 300,
+      "ResourceRecords": [{ "Value": "192.0.2.9" }]
+    },
+    {
+      "Name": "example.com.",
+      "Type": "MX",
+      "TTL": 3600,
+      "ResourceRecords": [
+        { "Value": "10 mail1.example.com." },
+        { "Value": "20 mail2.example.com." }
+      ]
+    },
+    {
+      "Name": "example.com.",
+      "Type": "TXT",
+      "TTL": 300,
+      "ResourceRecords": [{ "Value": "\"v=spf1 include:_spf.example.com ~all\"" }]
+    },
+    {
+      "Name": "long.example.com.",
+      "Type": "TXT",
+      "TTL": 300,
+      "ResourceRecords": [{ "Value": "\"part-one-\" \"part-two\"" }]
+    },
+    {
+      "Name": "quote.example.com.",
+      "Type": "TXT",
+      "TTL": 300,
+      "ResourceRecords": [{ "Value": "\"has a \\\"quote\\\" inside\"" }]
+    },
+    {
+      "Name": "example.com.",
+      "Type": "CAA",
+      "TTL": 300,
+      "ResourceRecords": [{ "Value": "0 issue \"letsencrypt.org\"" }]
+    },
+    {
+      "Name": "_sip._tcp.example.com.",
+      "Type": "SRV",
+      "TTL": 300,
+      "ResourceRecords": [{ "Value": "1 10 5060 sipserver.example.com." }]
+    },
+    {
+      "Name": "delegated.example.com.",
+      "Type": "NS",
+      "TTL": 172800,
+      "ResourceRecords": [{ "Value": "ns1.otherprovider.net." }]
+    },
+    {
+      "Name": "api.example.com.",
+      "Type": "A",
+      "TTL": 60,
+      "SetIdentifier": "us-east",
+      "Weight": 100,
+      "ResourceRecords": [{ "Value": "198.51.100.10" }]
+    },
+    {
+      "Name": "cdn.example.com.",
+      "Type": "A",
+      "AliasTarget": {
+        "HostedZoneId": "Z2FDTNDATAQYW2",
+        "DNSName": "d123.cloudfront.net.",
+        "EvaluateTargetHealth": false
+      }
+    },
+    {
+      "Name": "ptr.example.com.",
+      "Type": "PTR",
+      "TTL": 300,
+      "ResourceRecords": [{ "Value": "host.example.com." }]
+    }
+  ]
+}
