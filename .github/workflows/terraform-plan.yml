@@ -31,7 +31,7 @@ jobs:
     environment: plan
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # secrets are not available in job-level `if:`, so detect them in a step
       # and gate the plan on the result. Before the Cloudflare credentials are
@@ -52,7 +52,7 @@ jobs:
 
       - name: Set up Terraform
         if: steps.creds.outputs.present == 'true'
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.8"
 
@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload plan artifact
         if: steps.creds.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tfplan-${{ github.sha }}
           path: terraform/tfplan
