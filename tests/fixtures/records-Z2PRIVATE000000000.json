@@ -1,0 +1,10 @@
+{
+  "ResourceRecordSets": [
+    {
+      "Name": "internal.example.",
+      "Type": "A",
+      "TTL": 300,
+      "ResourceRecords": [{ "Value": "10.0.0.1" }]
+    }
+  ]
+}

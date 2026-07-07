@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tdlmatias/aws_cloudflare_migration/schemas/review.schema.json",
+  "title": "Manual-review report",
+  "description": "Records that could not be migrated automatically and require a human decision.",
+  "type": "object",
+  "required": ["schema_version", "alias_records", "review_records"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "alias_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["zone", "name", "type", "target"],
+        "properties": {
+          "zone": { "type": "string" },
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "target": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "review_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["zone", "name", "type", "reason"],
+        "properties": {
+          "zone": { "type": "string" },
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "skipped_managed",
+              "routing_policy",
+              "structured_data_required",
+              "unsupported_type",
+              "empty_record_set",
+              "private_hosted_zone"
+            ]
+          },
+          "detail": { "type": "string" }
+        }
+      }
+    }
+  }
+}

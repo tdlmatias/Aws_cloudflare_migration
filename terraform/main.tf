@@ -2,10 +2,6 @@ terraform {
   required_version = "~> 1.9"
 
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
     cloudflare = {
       source  = "cloudflare/cloudflare"
       version = "~> 5"
@@ -13,24 +9,47 @@ terraform {
   }
 }
 
-provider "aws" {
-  region = var.aws_region
-  # Uses AWS credential chain (environment variables, instance profiles, etc.)
-  # Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables
-}
-
+# This configuration only creates Cloudflare resources. AWS is used exclusively
+# by the read-only export step (scripts/export_route53.sh), so no AWS provider
+# or AWS credentials are required here.
 provider "cloudflare" {
   api_token = var.cloudflare_api_token
 }
 
-
 locals {
-  zones = jsondecode(file("${path.module}/data/zones.json")).zones
+  data_file = coalesce(var.zones_file, "${path.module}/data/zones.json")
+  zones     = jsondecode(file(local.data_file)).zones
+
   records = flatten([
     for zone in local.zones : [
       for record in zone.records : merge(record, { zone_name = zone.name })
     ]
   ])
+
+  # Deterministic, collision-detecting map key for DNS records.
+  record_map = {
+    for record in local.records :
+    join("|", [
+      record.zone_name,
+      record.name,
+      record.type,
+      tostring(record.content),
+      tostring(lookup(record, "priority", "")),
+    ]) => record
+  }
+}
+
+# Guard against a destructive apply triggered by an empty or incomplete export.
+# If zones.json has no zones, the plan would delete every managed zone.
+resource "terraform_data" "guard" {
+  input = length(local.zones)
+
+  lifecycle {
+    precondition {
+      condition     = length(local.zones) > 0
+      error_message = "data/zones.json contains no zones. Refusing to apply to avoid destroying existing Cloudflare zones. Re-run the export before applying."
+    }
+  }
 }
 
 resource "cloudflare_zone" "zones" {
@@ -43,10 +62,7 @@ resource "cloudflare_zone" "zones" {
 }
 
 resource "cloudflare_dns_record" "records" {
-  for_each = {
-    for record in local.records :
-    "${record.zone_name}-${record.name}-${record.type}-${record.content}-${lookup(record, "priority", "")}" => record
-  }
+  for_each = local.record_map
 
   zone_id  = cloudflare_zone.zones[each.value.zone_name].id
   name     = each.value.name
@@ -54,5 +70,7 @@ resource "cloudflare_dns_record" "records" {
   content  = each.value.content
   ttl      = each.value.ttl
   priority = lookup(each.value, "priority", null)
-  proxied  = lookup(each.value, "proxied", false)
+  # Records are unproxied by default so DNS behaviour matches Route53 during
+  # cutover; enable the Cloudflare proxy explicitly per record when desired.
+  proxied = lookup(each.value, "proxied", false)
 }

@@ -1,0 +1,4 @@
+# Runtime dependency for the converter/validator.
+jsonschema>=4.0
+# Optional: only needed for the boto3-based export path (see docs).
+# boto3>=1.34

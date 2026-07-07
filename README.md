@@ -1,91 +1,137 @@
-# Aws_cloudflare_migration
+# AWS Route53 → Cloudflare Migration
 
-Migration of 12 Domain and DNS Records from Amazon AWS Route53 into Cloudflare.
+Infrastructure-as-Code tooling to migrate DNS zones and records from **AWS
+Route53** to **Cloudflare**. Route53 is exported to a deterministic,
+schema-validated `zones.json`, which Terraform turns into Cloudflare zones and
+DNS records. Records that cannot be migrated automatically are written to a
+manual-review report — never silently dropped.
 
-## Overview
-This repo provides a repeatable, low-touch workflow to export Route53 hosted zones with the AWS CLI
-and apply them into Cloudflare using Terraform. The process produces a `zones.json` file that
-Terraform consumes to create zones and DNS records. Alias records are collected separately for
-manual review because Route53 aliases do not map 1:1 to Cloudflare.
+## Project status
 
-## Prerequisites
-- AWS CLI authenticated to the AWS account hosting the Route53 zones.
-- `jq` and `python3`.
-- Terraform ~> 1.9.0 (aligned with CI and local validation workflows).
-- Cloudflare API token with Zone and DNS edit permissions.
+Ready for **controlled staging**. Production apply is manual and
+environment-protected. See `docs/AUDIT_REPORT.md` for the engineering audit and
+`docs/ARCHITECTURE.md` for the design. This is not a one-click "zero downtime"
+button: low-downtime cutover depends on following `docs/MIGRATION_RUNBOOK.md`
+(lower TTLs, verify, keep Route53 as rollback).
 
-## Project Structure
-From project folder and files
+## Supported vs unsupported Route53 features
 
-```.
-├── LICENSE
-├── README.md
-├── route53-to-cloudflare-migration
-│   ├── README.md
-│   ├── data
-│   │   └── domain.json
-│   ├── extract
-│   │   └── export_route53_to_json.py
-│   ├── logs
-│   │   └── migration.log
-│   ├── scripts
-│   │   └── run_all.sh
-│   └── terraform
-│       ├── main.tf
-│       ├── modules
-│       │   └── zones
-│       │       ├── main.tf
-│       │       ├── output.tf
-│       │       ├── variables.tf
-│       │       └── version.tf
-│       ├── terraform.tfvars
-│       └── variables.tf
-├── scripts
-│   ├── export_route53.sh
-│   └── route53_to_cloudflare.py
-└── terraform
-    ├── data
-    │   └── zones.json
-    ├── main.tf
-    ├── terraform.tfvars
-    └── variables.tf
+| Automatically migrated | Reported for manual review |
+| ---------------------- | -------------------------- |
+| A, AAAA, CNAME, TXT (incl. split/long/escaped), MX (with priority), NS delegations | Alias records, weighted/latency/failover/geo routing, health checks |
+| Zone-apex normalisation to `@`, multi-value round-robin, wildcards | CAA, SRV (parsed but need Cloudflare `data` blocks) |
+| Trailing-dot removal, deterministic ordering | Private hosted zones (never migrated to public Cloudflare) |
+| SOA / apex NS dropped (Cloudflare-managed) | Unsupported record types |
+
+## Repository layout
+
+```
+migration/            # Python package: converter, schema validation, CLI
+schemas/              # Versioned JSON Schema for zones.json and the review report
+scripts/              # export_route53.sh (AWS CLI export + convert)
+terraform/            # Cloudflare zones + DNS records from data/zones.json
+  data/zones.json     # Sample/generated Terraform input
+  tests/              # Native terraform tests (mock provider)
+tests/                # pytest: unit, schema contract, CLI, shell integration
+docs/                 # Audit, architecture, runbook, security model, diagrams
+.github/workflows/    # ci, terraform-plan, terraform-apply, security, export
 ```
 
-## Export Route53 data
-From the repo root:
+## Prerequisites
+
+* AWS CLI authenticated with read-only Route53 access.
+* Cloudflare API token (`Zone:Edit`, `DNS:Edit`).
+* `python3` (>= 3.10), `jq`, Terraform `~> 1.9`.
+
+## Install
+
+```bash
+make install     # editable install with dev tooling
+```
+
+## Local validation and tests
+
+```bash
+make ci               # ruff + mypy + pytest (+coverage) + schema validation
+make lint             # ruff + shellcheck + terraform fmt -check
+make terraform-test   # terraform fmt/validate/test (needs provider registry)
+make security         # gitleaks + checkov (if installed)
+```
+
+## 1. Export Route53
 
 ```bash
 ./scripts/export_route53.sh terraform/data
 ```
 
-This writes:
-- `terraform/data/zones.json` (used by Terraform)
-- `terraform/data/alias-records.json` (manual review)
+Writes `terraform/data/zones.json` (Terraform input) and
+`terraform/data/manual-review.json` (aliases, routing policies, unsupported
+records, private zones). Review the report before continuing.
 
-## Terraform apply
-From the repo root:
+## 2. Dry run / validate
 
 ```bash
-# Export AWS credentials via environment variables (used by AWS credential chain)
-export AWS_ACCESS_KEY_ID="your-access-key"
-export AWS_SECRET_ACCESS_KEY="your-secret-key"
-export AWS_REGION="us-east-1"
-
-# Export Cloudflare credentials
-export CLOUDFLARE_API_TOKEN="your-cloudflare-token"
-export CLOUDFLARE_ACCOUNT_ID="your-account-id"
-
-cd terraform
-terraform init
-terraform apply -auto-approve \
-  -var="cloudflare_api_token=${CLOUDFLARE_API_TOKEN}" \
-  -var="cloudflare_account_id=${CLOUDFLARE_ACCOUNT_ID}" \
-  -var="aws_region=${AWS_REGION}"
+python -m migration validate terraform/data/zones.json --schema zones
 ```
 
-**Security Note:** Terraform now uses the standard AWS credential chain instead of passing credentials through variables. This prevents credential exposure in state files and logs. Set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as environment variables, or use AWS instance profiles/OIDC for better security.
+## 3. Plan
 
-## Notes
-- `alias-records.json` should be reviewed and translated to the Cloudflare equivalent (often CNAME
-  or provider-specific configuration).
-- If a record name equals the zone apex, it is normalized to `@` in Cloudflare.
+```bash
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars   # or use env vars
+export TF_VAR_cloudflare_api_token="<token>"
+export TF_VAR_cloudflare_account_id="<32-hex-account-id>"
+
+cd terraform
+terraform init            # configure a remote backend first (see backend.tf.example)
+terraform plan -out=tfplan
+```
+
+Review the plan: zone count, record count, and **no unexpected destroys**.
+
+## 4. Controlled apply
+
+Production apply runs through the protected `terraform-apply` GitHub workflow
+(`workflow_dispatch`, `confirm=apply`, required-reviewer environment). For a
+non-production/staging account you can apply the reviewed plan locally:
+
+```bash
+terraform apply tfplan
+```
+
+The configuration refuses to apply an empty `zones.json` (guard against
+destroying zones from an incomplete export).
+
+## 5. Verify, cut over, roll back
+
+Follow `docs/MIGRATION_RUNBOOK.md`: verify records against the Cloudflare
+nameservers directly, switch registrar nameservers, monitor, and keep Route53
+authoritative during the rollback window.
+
+## Security
+
+* No long-lived AWS keys — CI export uses GitHub OIDC (read-only Route53).
+* Terraform manages Cloudflare only and never receives AWS credentials.
+* Secrets via environment/secret store, never committed. `*.tfvars` and
+  generated data are git-ignored; gitleaks + checkov run in CI.
+* See `SECURITY.md` and `docs/SECURITY_MODEL.md`.
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+| ------- | ----------- |
+| `cloudflare_account_id must be a 32-character hexadecimal string` | Use the account id, not a zone id. |
+| Plan wants to destroy many records | Stale/incomplete `zones.json`; re-run the export. |
+| Apply blocked: "contains no zones" | The guard fired on an empty export; re-export. |
+| `terraform init` cannot reach the registry | Network/egress policy blocks `registry.terraform.io`. |
+| Records need a `data` block (CAA/SRV) | See the manual-review report; add manually in Cloudflare. |
+
+## Documentation
+
+* [`docs/AUDIT_REPORT.md`](docs/AUDIT_REPORT.md) — findings and remediations
+* [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — design + diagrams
+* [`docs/MIGRATION_RUNBOOK.md`](docs/MIGRATION_RUNBOOK.md) — step-by-step migration
+* [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md) — credentials, OIDC, state
+
+## License
+
+GNU General Public License v3.0 — see [`LICENSE`](LICENSE).
