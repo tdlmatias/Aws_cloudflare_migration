@@ -44,14 +44,17 @@ def test_record_name_for_zone(record: str, zone: str, expected: str) -> None:
     ("value", "expected"),
     [
         ('"simple"', "simple"),
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ('"simple"', "simple"),
         ('"v=spf1 ~all"', "v=spf1 ~all"),
         ('"part-one-" "part-two"', "part-one-part-two"),
         ('"has a \\"quote\\" inside"', 'has a "quote" inside'),
         ('"a" "b" "c"', "abc"),
-        # An escaped backslash collapses to a single backslash.
-        ('"foo\\\\bar"', "foo\\bar"),
-        # Whitespace outside the quoted chunks is a separator, not content.
+        ('"foo\\\\bar"', r"foo\\bar"),
         ('  "leading and trailing"  ', "leading and trailing"),
+        ("  unquoted with spaces  ", "unquoted with spaces"),
     ],
 )
 def test_unquote_txt(value: str, expected: str) -> None:
