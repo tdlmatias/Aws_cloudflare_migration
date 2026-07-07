@@ -39,6 +39,7 @@ Open `terraform/data/manual-review.json`. For each entry:
 | ------ | ------ |
 | `skipped_managed` | None — Cloudflare manages SOA and apex NS. |
 | `routing_policy` | Decide the Cloudflare equivalent (or accept as out of scope). |
+| `invalid_mx` | Fix the malformed MX value (needs `<priority> <host>`) at source and re-export, or recreate it manually. Must be resolved before apply. |
 | `structured_data_required` (CAA/SRV) | Add manually in Cloudflare or extend Terraform. |
 | `unsupported_type` | Recreate manually if still needed. |
 | `private_hosted_zone` | Do **not** migrate to public Cloudflare. |
