@@ -10,6 +10,9 @@
 # read-only Route53 permissions (route53:ListHostedZones,
 # route53:ListResourceRecordSets). No infrastructure is modified.
 #
+# Requires: bash, coreutils (mktemp/date/mkdir/mv/rm/dirname), aws, jq, python3.
+# The aws/jq/python3 tools are checked explicitly below.
+#
 set -euo pipefail
 
 # Resolve the repository root from this script's location so the tool works
@@ -33,7 +36,10 @@ for tool in aws jq python3; do
 done
 
 # --- Work in a temporary directory, publish atomically on success -----------
-work_dir="$(mktemp -d)"
+# Create the temp dir as a sibling of the output dir so the final publish is an
+# atomic same-filesystem rename rather than a cross-device copy.
+mkdir -p "$(dirname -- "${out_dir}")"
+work_dir="$(mktemp -d "${out_dir}.XXXXXX")"
 cleanup() { rm -rf "${work_dir}"; }
 trap cleanup EXIT
 

@@ -249,6 +249,11 @@ def convert_record_set(
             ],
         )
 
+    if record_type == "MX":
+        # MX needs a numeric priority; malformed values are routed to review
+        # rather than emitted as an invalid Cloudflare record.
+        return _convert_mx(zone_name, name, ttl, resource_records)
+
     if record_type in DIRECT_TYPES:
         return _convert_direct(name, record_type, ttl, resource_records), [], []
 
@@ -282,15 +287,46 @@ def _convert_direct(
         entry: dict[str, Any] = {"name": name, "type": record_type, "ttl": ttl}
         if record_type == "TXT":
             entry["content"] = unquote_txt(value)
-        elif record_type == "MX":
-            priority, host = parse_mx(value)
-            entry["content"] = host
-            entry["priority"] = priority
         else:
             entry["content"] = strip_trailing_dot(value)
         entry["proxied"] = False
         records.append(entry)
     return records
+
+
+def _convert_mx(
+    zone_name: str, name: str, ttl: int, resource_records: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Convert MX values, routing any without a numeric priority to review."""
+    direct: list[dict[str, Any]] = []
+    review: list[dict[str, Any]] = []
+    for rr in resource_records:
+        priority, host = parse_mx(rr["Value"])
+        if priority is None:
+            review.append(
+                {
+                    "zone": zone_name,
+                    "name": name,
+                    "type": "MX",
+                    "reason": "invalid_mx",
+                    "detail": (
+                        "MX value is missing a numeric priority; expected "
+                        f"'<priority> <host>' but got {rr['Value']!r}."
+                    ),
+                }
+            )
+        else:
+            direct.append(
+                {
+                    "name": name,
+                    "type": "MX",
+                    "ttl": ttl,
+                    "content": host,
+                    "priority": priority,
+                    "proxied": False,
+                }
+            )
+    return direct, [], review
 
 
 def _convert_review_type(

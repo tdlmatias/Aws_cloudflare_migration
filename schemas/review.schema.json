@@ -41,6 +41,7 @@
               "routing_policy",
               "structured_data_required",
               "unsupported_type",
+              "invalid_mx",
               "empty_record_set",
               "private_hosted_zone"
             ]

@@ -31,6 +31,8 @@ def test_convert_writes_valid_documents(fixture_dir, tmp_path, capsys) -> None:
     assert zones["schema_version"] == "1.0.0"
     assert any(z["name"] == "example.com" for z in zones["zones"])
     assert review["review_records"]  # unsupported / routing / structured items present
+    # The user-facing manual-review note is written to stderr.
+    assert "item(s) need manual review" in capsys.readouterr().err
 
 
 def test_convert_is_byte_for_byte_deterministic(fixture_dir, tmp_path) -> None:

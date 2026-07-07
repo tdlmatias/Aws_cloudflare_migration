@@ -48,6 +48,10 @@ def test_record_name_for_zone(record: str, zone: str, expected: str) -> None:
         ('"part-one-" "part-two"', "part-one-part-two"),
         ('"has a \\"quote\\" inside"', 'has a "quote" inside'),
         ('"a" "b" "c"', "abc"),
+        # An escaped backslash collapses to a single backslash.
+        ('"foo\\\\bar"', "foo\\bar"),
+        # Whitespace outside the quoted chunks is a separator, not content.
+        ('  "leading and trailing"  ', "leading and trailing"),
     ],
 )
 def test_unquote_txt(value: str, expected: str) -> None:
@@ -105,6 +109,14 @@ def test_mx_sets_priority_and_host() -> None:
         "priority": 10,
         "proxied": False,
     }
+
+
+def test_invalid_mx_routed_to_review() -> None:
+    direct, _, review = convert_record_set(
+        "example.com", _rs("example.com.", "MX", ["mail.example.com."])
+    )
+    assert direct == []
+    assert review[0]["reason"] == "invalid_mx"
 
 
 def test_soa_is_skipped_managed() -> None:
@@ -178,6 +190,24 @@ def test_private_zone_routed_to_review(fixture_dir) -> None:
     zone_names = {z["name"] for z in result.zones}
     assert "internal.example" not in zone_names
     assert any(r["reason"] == "private_hosted_zone" for r in result.review_records)
+
+
+def test_private_zone_included_when_allowed(fixture_dir) -> None:
+    from migration.io import read_json
+
+    hosted = read_json(fixture_dir / "hosted-zones.json")["HostedZones"]
+    records = {
+        "Z1PUBLIC0000000000": read_json(fixture_dir / "records-Z1PUBLIC0000000000.json")[
+            "ResourceRecordSets"
+        ],
+        "Z2PRIVATE000000000": read_json(fixture_dir / "records-Z2PRIVATE000000000.json")[
+            "ResourceRecordSets"
+        ],
+    }
+    result = convert_hosted_zones(hosted, records, allow_private_zones=True)
+    zone_names = {z["name"] for z in result.zones}
+    assert "internal.example" in zone_names
+    assert not any(r["reason"] == "private_hosted_zone" for r in result.review_records)
 
 
 def test_conversion_is_deterministic(fixture_dir) -> None:
