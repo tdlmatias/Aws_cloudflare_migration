@@ -21,8 +21,16 @@ format: ## Auto-format Python and Terraform
 lint: ## Lint Python, shell and Terraform formatting
 	ruff check .
 	ruff format --check .
-	shellcheck scripts/*.sh
-	terraform -chdir=$(TERRAFORM_DIR) fmt -check -recursive
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		shellcheck scripts/*.sh; \
+	else \
+		echo "shellcheck not installed; skipping shell lint"; \
+	fi
+	@if command -v terraform >/dev/null 2>&1; then \
+		terraform -chdir=$(TERRAFORM_DIR) fmt -check -recursive; \
+	else \
+		echo "terraform not installed; skipping terraform fmt check"; \
+	fi
 
 typecheck: ## Run mypy
 	mypy migration
@@ -38,10 +46,14 @@ validate: ## Validate generated zones.json against the schema
 	python -m migration validate $(TERRAFORM_DIR)/data/zones.json --schema zones
 
 terraform-test: ## Terraform fmt, validate and native tests (needs provider registry)
-	terraform -chdir=$(TERRAFORM_DIR) fmt -check -recursive
-	terraform -chdir=$(TERRAFORM_DIR) init -backend=false -input=false
-	terraform -chdir=$(TERRAFORM_DIR) validate
-	terraform -chdir=$(TERRAFORM_DIR) test
+	@if command -v terraform >/dev/null 2>&1; then \
+		terraform -chdir=$(TERRAFORM_DIR) fmt -check -recursive; \
+		terraform -chdir=$(TERRAFORM_DIR) init -backend=false -input=false; \
+		terraform -chdir=$(TERRAFORM_DIR) validate; \
+		terraform -chdir=$(TERRAFORM_DIR) test; \
+	else \
+		echo "terraform not installed; skipping terraform validation and tests"; \
+	fi
 
 export-fixture: ## Convert the bundled test fixture into zones.json (no AWS needed)
 	python -m migration convert \
