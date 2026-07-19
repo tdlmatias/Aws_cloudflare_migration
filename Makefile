@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 TERRAFORM_DIR := terraform
 
-.PHONY: help install format lint typecheck test security validate terraform-test export-fixture ci
+.PHONY: help install format lint typecheck test security validate terraform-test terraform-test-ci export-fixture ci
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -21,8 +21,16 @@ format: ## Auto-format Python and Terraform
 lint: ## Lint Python, shell and Terraform formatting
 	ruff check .
 	ruff format --check .
-	shellcheck scripts/*.sh
-	terraform -chdir=$(TERRAFORM_DIR) fmt -check -recursive
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		shellcheck scripts/*.sh; \
+	else \
+		echo "shellcheck not installed; skipping shell lint"; \
+	fi
+	@if command -v terraform >/dev/null 2>&1; then \
+		terraform -chdir=$(TERRAFORM_DIR) fmt -check -recursive; \
+	else \
+		echo "terraform not installed; skipping terraform fmt check"; \
+	fi
 
 typecheck: ## Run mypy
 	mypy migration
@@ -38,10 +46,22 @@ validate: ## Validate generated zones.json against the schema
 	python -m migration validate $(TERRAFORM_DIR)/data/zones.json --schema zones
 
 terraform-test: ## Terraform fmt, validate and native tests (needs provider registry)
-	terraform -chdir=$(TERRAFORM_DIR) fmt -check -recursive
-	terraform -chdir=$(TERRAFORM_DIR) init -backend=false -input=false
-	terraform -chdir=$(TERRAFORM_DIR) validate
-	terraform -chdir=$(TERRAFORM_DIR) test
+	@if ! command -v terraform >/dev/null 2>&1; then \
+		if [ "$${CI:-}" = "true" ] || [ "$${CI:-}" = "1" ] || [ "$${REQUIRE_TERRAFORM:-0}" = "1" ]; then \
+			echo "terraform is required but not installed" >&2; \
+			exit 1; \
+		else \
+			echo "terraform not installed; skipping terraform validation and tests"; \
+		fi; \
+	else \
+		terraform -chdir=$(TERRAFORM_DIR) fmt -check -recursive; \
+		terraform -chdir=$(TERRAFORM_DIR) init -backend=false -input=false; \
+		terraform -chdir=$(TERRAFORM_DIR) validate; \
+		terraform -chdir=$(TERRAFORM_DIR) test; \
+	fi
+
+terraform-test-ci: ## Strict Terraform validation target for CI/review gates
+	@REQUIRE_TERRAFORM=1 $(MAKE) terraform-test
 
 export-fixture: ## Convert the bundled test fixture into zones.json (no AWS needed)
 	python -m migration convert \
@@ -56,4 +76,4 @@ diagram: ## Render Mermaid diagrams to SVG (needs @mermaid-js/mermaid-cli)
 	mmdc -i docs/diagrams/system-architecture.mmd -o docs/diagrams/system-architecture.svg
 	mmdc -i docs/diagrams/migration-sequence.mmd -o docs/diagrams/migration-sequence.svg
 
-ci: lint typecheck test validate ## Run the full local quality gate
+ci: lint typecheck test validate terraform-test-ci ## Run the full local quality gate
