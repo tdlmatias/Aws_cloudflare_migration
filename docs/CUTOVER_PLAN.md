@@ -18,6 +18,10 @@ lowering TTLs early, verifying on the new nameservers, and not deleting Route53.
 - [ ] Cloudflare account id + a scoped API token (`Zone:Edit`, `DNS:Edit`).
 - [ ] Terraform remote backend configured (`terraform/backend.tf` from the example).
 - [ ] A second engineer available to review the plan on Day 3.
+- [ ] **DNSSEC inventory:** for each in-scope zone, record whether DNSSEC is
+  enabled (a DS record published at the registrar/parent) and note the DS TTL.
+  DNSSEC zones need the extra transition in Day 1 step 5 — cutting over with a
+  stale DS breaks the chain of trust and returns SERVFAIL.
 
 ---
 
@@ -36,9 +40,18 @@ Goal: point the tooling at the new account and start the TTL clock.
 4. **Record the baseline:** per zone, note the current authoritative NS and the
    record count (`aws route53 list-resource-record-sets` count). You will
    compare the Terraform plan against these numbers on Day 2–3.
+5. **Begin the DNSSEC transition for any signed zone.** You cannot carry the
+   Route53 DNSSEC keys to Cloudflare, so the chain of trust must be broken
+   before cutover and re-established after. For each zone with DNSSEC enabled:
+   remove the DS record at the registrar/parent now (or disable DNSSEC in
+   Route53, which withdraws the DS), then **wait for the DS TTL to expire** so no
+   validating resolver still expects the old signatures. Do not change
+   nameservers on that zone until its DS has aged out. Cloudflare DNSSEC is
+   re-enabled after verification (Day 4 step 4). Zones without DNSSEC skip this.
 
 Exit criteria: export workflow green against the new account; TTLs lowered;
-baseline counts recorded.
+baseline counts recorded; DS removed (and TTL-expired, or expiring) for every
+DNSSEC zone.
 
 ## Day 2 — Wed 19 Aug: export, resolve, validate, plan
 
@@ -62,9 +75,19 @@ surprising destroys), manual-review items resolved.
 
 1. **Second-engineer review** of the plan artifact and resolved review items;
    record the reviewed plan + a migration timestamp in the PR (runbook §6).
-2. **Protected apply:** trigger `terraform-apply` via `workflow_dispatch` with
-   `confirm=apply`; approve the `production` environment gate. Capture the
-   `zone_ids` / `zone_count` / `record_count` outputs.
+   **Merge the reviewed PR to `main`** so the reviewed `zones.json` is the tip of
+   the branch you will apply from — do not apply from an unmerged or stale ref.
+2. **Protected apply — bound to the reviewed commit.** `terraform-apply`
+   checks out the dispatch ref and **re-plans at dispatch time**, then applies
+   that fresh plan; it does not consume the Day 2 plan artifact. So:
+   - Dispatch `terraform-apply` (`workflow_dispatch`, `confirm=apply`) from the
+     **exact reviewed SHA** (the merge commit from step 1), never a moving
+     branch that may have advanced.
+   - The `production` environment gate pauses the run *before* the plan is
+     produced, so the approver must **read the fresh plan in the run log** and
+     confirm it matches the reviewed plan (same creates, still zero destroys)
+     before approving — intervening Cloudflare drift can change it.
+   - Capture the `zone_ids` / `zone_count` / `record_count` outputs.
 3. **Verify against the Cloudflare nameservers directly** — *before* any
    registrar change (runbook §8). For each zone, dig the apex A/AAAA, MX, and the
    mail TXT trio explicitly:
@@ -90,10 +113,21 @@ Cut over in the morning so the team is present through the propagation window.
 2. **Monitor** resolution and application/email health as each domain flips.
    `dig NS example.com +short` should begin returning the Cloudflare NS.
 3. **Do not touch Route53.** It remains the rollback target.
+4. **Re-enable DNSSEC (only after the zone verifies clean on Cloudflare).** For
+   each zone you broke DNSSEC on in Day 1 step 5, enable DNSSEC in Cloudflare and
+   publish the **new** Cloudflare DS record at the registrar. Never add the new
+   DS before the nameservers have flipped and resolve correctly, or you
+   re-break the chain.
 
-Rollback (any time): revert the registrar NS to the recorded Route53 set;
-because Route53 is unchanged and TTLs are low, resolution returns to the old
-state quickly (runbook §10 / rollback quick reference).
+Rollback (any time): revert the registrar NS to the recorded Route53 set.
+Recovery speed is bounded by the **parent delegation TTL** (the registry/TLD's
+TTL on the NS/DS records), **not** the Route53 record TTLs — validating
+resolvers may keep querying the Cloudflare nameservers until the delegation
+you set at cutover expires from their cache. Lowering record TTLs in Day 1
+speeds recovery *within* a zone once resolvers follow the delegation back to
+Route53; it does not shorten the delegation TTL itself. Size the rollback window
+around that delegation TTL, and if a zone had DNSSEC, also withdraw the
+Cloudflare DS as part of rolling back. (runbook §10 / rollback quick reference).
 
 ## Fri PM – Sun 23 Aug: rollback window
 
@@ -104,7 +138,7 @@ state quickly (runbook §10 / rollback quick reference).
 ## Day 5 — Mon 24 Aug: confirm stable, schedule decommission
 
 - Confirm all domains resolve on Cloudflare and applications are healthy.
-- **Do not delete Route53 yet from urgency** — schedule the hosted-zone
+- **Do not delete Route53 out of urgency** — schedule the hosted-zone
   decommission as a separate, deliberate change once you are past the agreed
   stability window.
 
@@ -116,8 +150,9 @@ state quickly (runbook §10 / rollback quick reference).
 | ---- | ------ | ----------------- |
 | G1 (end Day 1) | starting export | Export workflow green on the new account; TTLs lowered ≥48h before cutover |
 | G2 (end Day 2) | apply | Plan shows creates only, count ≈ baseline, all `invalid_mx` fixed |
-| G3 (end Day 3) | registrar cutover | Every zone verified correct on its Cloudflare NS |
-| G4 (Day 4) | leaving cutover | NS delegation observed flipping; mail + app health nominal |
+| G3 (end Day 3) | registrar cutover | Reviewed PR merged; apply dispatched from that SHA and the fresh in-run plan re-confirmed at the approval gate; every zone verified correct on its Cloudflare NS |
+| G-DNSSEC (per zone, before its NS switch) | registrar cutover of a signed zone | Old DS removed at the parent and its DS TTL expired; new Cloudflare DS **not** published until after the NS flip verifies |
+| G4 (Day 4) | leaving cutover | NS delegation observed flipping; mail + app health nominal; Cloudflare DNSSEC re-enabled + new DS published for signed zones |
 
 ## Out of scope for the automated apply (handle manually in Cloudflare)
 
