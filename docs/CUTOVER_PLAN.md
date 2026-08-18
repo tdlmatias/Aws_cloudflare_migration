@@ -43,11 +43,14 @@ Goal: point the tooling at the new account and start the TTL clock.
 5. **Begin the DNSSEC transition for any signed zone.** You cannot carry the
    Route53 DNSSEC keys to Cloudflare, so the chain of trust must be broken
    before cutover and re-established after. For each zone with DNSSEC enabled:
-   remove the DS record at the registrar/parent now (or disable DNSSEC in
-   Route53, which withdraws the DS), then **wait for the DS TTL to expire** so no
-   validating resolver still expects the old signatures. Do not change
-   nameservers on that zone until its DS has aged out. Cloudflare DNSSEC is
-   re-enabled after verification (Day 4 step 4). Zones without DNSSEC skip this.
+   first **remove the DS record at the parent (your registrar / the TLD)** —
+   disabling signing in Route53 does *not* withdraw a parent DS, and leaving the
+   DS in place while the signatures change returns SERVFAIL, possibly before
+   cutover even begins. Then **wait for the DS TTL to expire** so no validating
+   resolver still expects the old chain. Only once the DS has aged out is it safe
+   to change that zone's nameservers (and to disable Route53 signing if you
+   wish). Cloudflare DNSSEC is re-enabled after verification (Day 4 step 4).
+   Zones without DNSSEC skip this.
 
 Exit criteria: export workflow green against the new account; TTLs lowered;
 baseline counts recorded; DS removed (and TTL-expired, or expiring) for every

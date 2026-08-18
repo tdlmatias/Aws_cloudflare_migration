@@ -25,8 +25,11 @@ de-risks those steps; it never performs them.
    out prominently and do not describe the plan as safe.
 3. Treat a missing zone or a >50% record drop versus the baseline as a likely
    incomplete export. Recommend re-exporting, never applying.
-4. Before recommending cutover, require that every in-scope zone was verified on
-   its Cloudflare nameservers and matches zones.json.
+4. Before recommending cutover, require that every in-scope zone reports
+   `fully_verified: true` from verify_cloudflare_records. A true `all_match` is
+   NOT sufficient — it is vacuously true for a zone with no origin-verifiable
+   records. Any `skipped_proxied` records must be confirmed another way (or
+   explicitly attested by the operator) before you treat a zone as verified.
 5. If a tool returns ok:false, report the error plainly and stop that line of
    work — do not guess around it or fabricate results.
 

@@ -179,6 +179,29 @@ def test_expected_answers_for_zone_prefixes_mx_priority() -> None:
     assert analysis.expected_answers_for_zone(zones_doc, "absent.net") == {}
 
 
+def test_verification_passed_gate() -> None:
+    # Normal pass: records verified, all matched, nothing skipped.
+    assert (
+        analysis.verification_passed(verified_count=3, all_match=True, skipped_proxied_count=0)
+        is True
+    )
+    # Vacuous all_match with nothing verified (e.g. all-proxied zone) must fail.
+    assert (
+        analysis.verification_passed(verified_count=0, all_match=True, skipped_proxied_count=2)
+        is False
+    )
+    # A mismatch fails.
+    assert (
+        analysis.verification_passed(verified_count=3, all_match=False, skipped_proxied_count=0)
+        is False
+    )
+    # Unverified proxied records fail the gate even if the subset matched.
+    assert (
+        analysis.verification_passed(verified_count=3, all_match=True, skipped_proxied_count=1)
+        is False
+    )
+
+
 def test_expected_answers_excludes_proxied_records() -> None:
     zones_doc = {
         "zones": [

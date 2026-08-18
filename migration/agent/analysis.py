@@ -231,6 +231,21 @@ def expected_answers_for_zone(zones_doc: dict[str, Any], zone_name: str) -> dict
     return {key: sorted(vals) for key, vals in sorted(answers.items())}
 
 
+def verification_passed(
+    *, verified_count: int, all_match: bool, skipped_proxied_count: int
+) -> bool:
+    """Decide whether the origin-verification cutover gate is satisfied.
+
+    The gate passes only when at least one record was actually origin-verified,
+    every verified record matched, AND no proxied record was left unverified.
+    This prevents a false pass for a zone with no origin-verifiable records
+    (e.g. an all-proxied zone), where ``all_match`` is vacuously true because no
+    query ran. Proxied records must be confirmed another way (or explicitly
+    attested by the operator) before cutover.
+    """
+    return verified_count > 0 and all_match and skipped_proxied_count == 0
+
+
 def proxied_record_keys(zones_doc: dict[str, Any], zone_name: str) -> list[str]:
     """Return ``"<name> <TYPE>"`` keys for the zone's proxied records.
 

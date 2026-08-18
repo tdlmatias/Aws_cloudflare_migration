@@ -241,15 +241,27 @@ def verify_cloudflare_records(
         all_match = all_match and comparison["match"]
         results.append({"record": key, "fqdn": fqdn, **comparison})
 
+    fully_verified = analysis.verification_passed(
+        verified_count=len(expected),
+        all_match=all_match,
+        skipped_proxied_count=len(skipped_proxied),
+    )
     return _ok(
         zone=zone,
         nameserver=nameserver,
+        # all_match reflects only the origin-verifiable (unproxied) records that
+        # were queried; it is vacuously true when nothing was queried.
         all_match=all_match,
         records=results,
         # Proxied records resolve to the Cloudflare edge, not the origin content,
         # so they are not origin-verified here — the operator checks them another
         # way (e.g. that the proxied hostname serves the expected app).
         skipped_proxied=skipped_proxied,
+        # The actual cutover gate: passes only when records were origin-verified,
+        # all matched, and nothing proxied was left unverified. Do not treat this
+        # zone as verified for cutover unless fully_verified is true (or a human
+        # has attested the proxied records separately).
+        fully_verified=fully_verified,
     )
 
 
