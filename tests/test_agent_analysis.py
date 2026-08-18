@@ -177,3 +177,27 @@ def test_expected_answers_for_zone_prefixes_mx_priority() -> None:
     assert answers["@ MX"] == ["10 mail.example.com"]
     assert answers["www CNAME"] == ["example.com"]
     assert analysis.expected_answers_for_zone(zones_doc, "absent.net") == {}
+
+
+def test_expected_answers_excludes_proxied_records() -> None:
+    zones_doc = {
+        "zones": [
+            {
+                "name": "example.com",
+                "records": [
+                    {"name": "@", "type": "A", "content": "1.2.3.4", "proxied": False},
+                    {"name": "app", "type": "A", "content": "10.0.0.9", "proxied": True},
+                    {
+                        "name": "shop",
+                        "type": "CNAME",
+                        "content": "origin.example.com",
+                        "proxied": True,
+                    },
+                ],
+            }
+        ]
+    }
+    answers = analysis.expected_answers_for_zone(zones_doc, "example.com")
+    # Only the unproxied apex A can be origin-verified.
+    assert answers == {"@ A": ["1.2.3.4"]}
+    assert analysis.proxied_record_keys(zones_doc, "example.com") == ["app A", "shop CNAME"]

@@ -12,9 +12,15 @@ terraform {
 # This configuration only creates Cloudflare resources. AWS is used exclusively
 # by the read-only export step (scripts/export_route53.sh), so no AWS provider
 # or AWS credentials are required here.
-provider "cloudflare" {
-  api_token = var.cloudflare_api_token
-}
+#
+# The API token is supplied via the CLOUDFLARE_API_TOKEN environment variable,
+# which the provider reads natively. It is deliberately NOT a Terraform variable:
+# variable values are recorded inside a saved plan (`terraform plan -out`), so
+# sourcing the token from a variable would bake it into the plan file and let a
+# saved plan pin the planning credential at apply time. Reading it from the
+# environment keeps the token out of the plan and state, and lets a two-phase
+# plan/apply pipeline authenticate each phase with its own token.
+provider "cloudflare" {}
 
 locals {
   data_file = coalesce(var.zones_file, "${path.module}/data/zones.json")

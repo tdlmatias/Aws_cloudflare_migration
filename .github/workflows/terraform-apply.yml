@@ -60,7 +60,7 @@ jobs:
       - name: Terraform plan
         working-directory: terraform
         env:
-          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: terraform plan -input=false -lock-timeout=120s -out=tfplan
 
@@ -118,7 +118,7 @@ jobs:
       - name: Terraform apply
         working-directory: terraform
         env:
-          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: terraform apply -input=false -lock-timeout=120s -auto-approve tfplan
 

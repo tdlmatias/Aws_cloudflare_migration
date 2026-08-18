@@ -5,7 +5,7 @@
 | Secret | Where it lives | Scope |
 | ------ | -------------- | ----- |
 | AWS access | GitHub OIDC → assumed IAM role (export only) | Read-only Route53 |
-| Cloudflare API token | `TF_VAR_cloudflare_api_token` / env / GitHub Environment secret | `Zone:Edit`, `DNS:Edit` |
+| Cloudflare API token | `CLOUDFLARE_API_TOKEN` env / GitHub Environment secret (read by the provider, not a Terraform variable) | `Zone:Edit`, `DNS:Edit` |
 | Cloudflare account id | env / secret | Non-secret identifier, still not committed |
 
 Principles:
@@ -13,10 +13,13 @@ Principles:
 * **No long-lived AWS keys.** The export workflow uses GitHub OIDC
   (`permissions: id-token: write`) to assume a read-only role.
 * **Terraform never receives AWS credentials** — it only manages Cloudflare.
-* Secrets are passed via environment (`TF_VAR_*`), never written to `.tfvars`
-  files or committed. `terraform.tfvars` is git-ignored; only
+* Secrets are passed via environment, never written to `.tfvars` files or
+  committed. `terraform.tfvars` is git-ignored; only
   `terraform.tfvars.example` (placeholders) is tracked.
-* The Cloudflare token variable is `sensitive` so it is redacted from plan output.
+* The Cloudflare API token is read from `CLOUDFLARE_API_TOKEN` by the provider
+  rather than declared as a Terraform variable, so it never enters the saved
+  plan file or state. (A token sourced from a variable is recorded in a
+  `terraform plan -out` file and would be reused when that plan is applied.)
 
 ## Recommended AWS OIDC trust policy (export role)
 

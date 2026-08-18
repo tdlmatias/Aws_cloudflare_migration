@@ -38,9 +38,11 @@ protected production apply; and a full local + CI test suite.
 * **AWS (source):** touched only by the read-only export step. In CI this uses
   GitHub OIDC to assume a role scoped to `route53:ListHostedZones` and
   `route53:ListResourceRecordSets`. No long-lived AWS keys.
-* **Cloudflare (target):** an API token (Zone:Edit, DNS:Edit) supplied via
-  `TF_VAR_cloudflare_api_token`/environment, never written to disk or state in
-  plaintext. Marked `sensitive` in Terraform.
+* **Cloudflare (target):** an API token (Zone:Edit, DNS:Edit) supplied via the
+  `CLOUDFLARE_API_TOKEN` environment variable read by the provider. It is not a
+  Terraform variable, so it never enters the plan file or state — which also
+  lets the two-phase plan/apply pipeline authenticate each phase with its own
+  token.
 * **Terraform state** contains the full zone/record graph and must live in an
   encrypted, locked, access-controlled backend (`terraform/backend.tf.example`).
 * Secrets never appear in logs, plans, artifacts, or job summaries.

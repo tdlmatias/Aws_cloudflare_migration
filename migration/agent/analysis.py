@@ -209,15 +209,40 @@ def expected_answers_for_zone(zones_doc: dict[str, Any], zone_name: str) -> dict
     Used by the DNS-verification tool to know what each Cloudflare nameserver
     *should* answer before cutover. MX content is prefixed with its priority to
     match ``dig``'s ``<priority> <host>`` answer format.
+
+    **Proxied records are excluded.** A record with ``proxied: true`` resolves to
+    Cloudflare edge addresses (and a proxied CNAME is flattened), not its origin
+    ``content``, so comparing the origin content to the nameserver answer would
+    always mismatch. Proxied records cannot be origin-verified this way; list
+    them with :func:`proxied_record_keys` and check them another way.
     """
     answers: dict[str, list[str]] = {}
     for zone in zones_doc.get("zones", []):
         if zone["name"] != zone_name:
             continue
         for record in zone.get("records", []):
+            if record.get("proxied"):
+                continue
             key = f"{record['name']} {record['type']}"
             content = record["content"]
             if record["type"] == "MX" and record.get("priority") is not None:
                 content = f"{record['priority']} {content}"
             answers.setdefault(key, []).append(content)
     return {key: sorted(vals) for key, vals in sorted(answers.items())}
+
+
+def proxied_record_keys(zones_doc: dict[str, Any], zone_name: str) -> list[str]:
+    """Return ``"<name> <TYPE>"`` keys for the zone's proxied records.
+
+    These are skipped by :func:`expected_answers_for_zone` because the Cloudflare
+    edge, not the origin, answers for them — the verification tool reports them so
+    an operator knows they were not origin-verified.
+    """
+    keys = {
+        f"{record['name']} {record['type']}"
+        for zone in zones_doc.get("zones", [])
+        if zone["name"] == zone_name
+        for record in zone.get("records", [])
+        if record.get("proxied")
+    }
+    return sorted(keys)

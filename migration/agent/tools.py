@@ -222,7 +222,8 @@ def verify_cloudflare_records(
         return _err(f"file not found: {path}")
 
     expected = analysis.expected_answers_for_zone(zones_doc, zone)
-    if not expected:
+    skipped_proxied = analysis.proxied_record_keys(zones_doc, zone)
+    if not expected and not skipped_proxied:
         return _err(f"zone {zone!r} not found in {path} (or it has no records)")
 
     results = []
@@ -240,7 +241,16 @@ def verify_cloudflare_records(
         all_match = all_match and comparison["match"]
         results.append({"record": key, "fqdn": fqdn, **comparison})
 
-    return _ok(zone=zone, nameserver=nameserver, all_match=all_match, records=results)
+    return _ok(
+        zone=zone,
+        nameserver=nameserver,
+        all_match=all_match,
+        records=results,
+        # Proxied records resolve to the Cloudflare edge, not the origin content,
+        # so they are not origin-verified here — the operator checks them another
+        # way (e.g. that the proxied hostname serves the expected app).
+        skipped_proxied=skipped_proxied,
+    )
 
 
 # The complete, capability-gated tool set. Adding a mutating tool (apply,

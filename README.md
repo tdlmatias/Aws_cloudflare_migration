@@ -78,7 +78,7 @@ python -m migration validate terraform/data/zones.json --schema zones
 
 ```bash
 cp terraform/terraform.tfvars.example terraform/terraform.tfvars   # or use env vars
-export TF_VAR_cloudflare_api_token="<token>"
+export CLOUDFLARE_API_TOKEN="<token>"            # read by the provider, not a TF var
 export TF_VAR_cloudflare_account_id="<32-hex-account-id>"
 
 cd terraform
