@@ -11,44 +11,72 @@ from __future__ import annotations
 
 from typing import Any
 
-# Review reasons that MUST be resolved before a production apply (per
-# docs/MIGRATION_RUNBOOK.md §3). Everything else is informational or handled
-# manually in Cloudflare.
+from migration.converter import unquote_txt
+
+# Review reasons that MUST be fixed at source before a production apply because
+# they represent malformed input (per docs/MIGRATION_RUNBOOK.md §3).
 BLOCKING_REVIEW_REASONS = frozenset({"invalid_mx", "empty_record_set"})
+
+# The only review reason that needs no operator action: Cloudflare manages SOA
+# and zone-apex NS automatically. Every OTHER review item (aliases, routing
+# policies, CAA/SRV, unsupported types) is omitted from zones.json, so it is
+# silently absent from the Terraform plan until a human maps it in Cloudflare.
+MANAGED_REVIEW_REASONS = frozenset({"skipped_managed"})
 
 
 def classify_manual_review(review_doc: dict[str, Any]) -> dict[str, Any]:
     """Summarise a ``manual-review.json`` document.
 
-    Returns counts per ``reason``, the number of alias records, and a list of
-    *blocking* items (malformed input that must be fixed before apply). A
-    ``ready_for_apply`` flag is true only when nothing blocking remains.
+    Returns counts per ``reason``, the alias count, the subset of *blocking*
+    items (malformed input that must be fixed), and ``requires_action`` — every
+    item that is missing from ``zones.json`` and needs an operator decision
+    (aliases plus any non-managed review record). ``ready_for_apply`` is true
+    only when nothing needs action: no blockers AND no unresolved aliases or
+    non-managed records. Reporting ready-to-apply while, say, an apex alias is
+    silently absent from the plan would be dangerous, so managed items
+    (Cloudflare-owned SOA/apex NS) are the only ones that do not gate.
     """
     review_records = review_doc.get("review_records", [])
     alias_records = review_doc.get("alias_records", [])
 
     reason_counts: dict[str, int] = {}
     blockers: list[dict[str, Any]] = []
+    requires_action: list[dict[str, Any]] = []
+
+    for alias in alias_records:
+        requires_action.append(
+            {
+                "zone": alias.get("zone"),
+                "name": alias.get("name"),
+                "type": alias.get("type"),
+                "reason": "alias_record",
+                "detail": alias.get("detail"),
+            }
+        )
+
     for item in review_records:
         reason = item.get("reason", "unknown")
         reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        entry = {
+            "zone": item.get("zone"),
+            "name": item.get("name"),
+            "type": item.get("type"),
+            "reason": reason,
+            "detail": item.get("detail"),
+        }
         if reason in BLOCKING_REVIEW_REASONS:
-            blockers.append(
-                {
-                    "zone": item.get("zone"),
-                    "name": item.get("name"),
-                    "type": item.get("type"),
-                    "reason": reason,
-                    "detail": item.get("detail"),
-                }
-            )
+            blockers.append(entry)
+            requires_action.append(entry)
+        elif reason not in MANAGED_REVIEW_REASONS:
+            requires_action.append(entry)
 
     return {
         "alias_count": len(alias_records),
         "review_count": len(review_records),
         "reason_counts": dict(sorted(reason_counts.items())),
         "blockers": blockers,
-        "ready_for_apply": not blockers,
+        "requires_action": requires_action,
+        "ready_for_apply": not requires_action,
     }
 
 
@@ -124,20 +152,46 @@ def summarize_terraform_plan(plan_json: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _normalise_rrset(values: list[str]) -> list[str]:
+def _normalise_value(value: str, record_type: str, *, is_observed: bool) -> str:
+    """Normalise a single DNS answer for comparison, per record type.
+
+    Domain-name and address payloads (A/AAAA/CNAME/MX/NS) are compared
+    case-insensitively with any trailing dot removed. TXT payloads are compared
+    **byte-faithfully** (case preserved, no trailing-dot stripping) — a DKIM
+    ``p=`` base64 key is case-sensitive, so lowercasing it would turn a real
+    mismatch into a false match.
+
+    The two sides are shaped differently for TXT: the expected value is the
+    already-unquoted content stored in ``zones.json`` (leave it as-is), while the
+    observed ``dig +short`` answer is wrapped in double quotes and long records
+    are split into multiple quoted chunks — so only the observed side is run
+    through :func:`migration.converter.unquote_txt` to reproduce that content.
+    """
+    if record_type == "TXT":
+        return unquote_txt(value.strip()) if is_observed else value.strip()
+    return value.strip().rstrip(".").lower()
+
+
+def _normalise_rrset(values: list[str], record_type: str, *, is_observed: bool) -> list[str]:
     """Normalise a set of DNS answers for order-independent comparison."""
-    return sorted(v.strip().rstrip(".").lower() for v in values if v.strip())
+    return sorted(
+        _normalise_value(v, record_type, is_observed=is_observed) for v in values if v.strip()
+    )
 
 
-def compare_rrset(expected: list[str], observed: list[str]) -> dict[str, Any]:
+def compare_rrset(
+    expected: list[str], observed: list[str], record_type: str = ""
+) -> dict[str, Any]:
     """Compare an expected answer set against what a nameserver actually returned.
 
-    Comparison is order-independent and ignores trailing dots and case, matching
-    how :mod:`migration.converter` normalises records. Returns the missing and
-    unexpected values and a ``match`` flag.
+    Comparison is order-independent. Normalisation depends on ``record_type``:
+    domain/address payloads ignore case and trailing dots; TXT payloads are
+    compared faithfully (see :func:`_normalise_value`), unquoting only the
+    observed (``dig``) side. Returns the missing and unexpected values and a
+    ``match`` flag.
     """
-    exp = _normalise_rrset(expected)
-    obs = _normalise_rrset(observed)
+    exp = _normalise_rrset(expected, record_type, is_observed=False)
+    obs = _normalise_rrset(observed, record_type, is_observed=True)
     missing = sorted(set(exp) - set(obs))
     unexpected = sorted(set(obs) - set(exp))
     return {

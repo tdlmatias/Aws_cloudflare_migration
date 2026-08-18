@@ -55,12 +55,16 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MIGRATION_AGENT_MODEL: ${{ vars.MIGRATION_AGENT_MODEL }}
+          # Pass the dispatch input through the environment (never interpolated
+          # into the script) so shell metacharacters in `task` cannot inject
+          # commands into this step.
+          TASK: ${{ github.event.inputs.task }}
         run: |
           if [ -z "${ANTHROPIC_API_KEY}" ]; then
             echo "::error::ANTHROPIC_API_KEY is not set in the 'export' environment; add it to run the agent."
             exit 1
           fi
-          python -m migration.agent "${{ github.event.inputs.task }}" | tee agent-report.md
+          python -m migration.agent "$TASK" | tee agent-report.md
 
       - name: Publish report to job summary
         if: always()

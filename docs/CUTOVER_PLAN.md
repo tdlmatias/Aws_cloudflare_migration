@@ -77,16 +77,16 @@ surprising destroys), manual-review items resolved.
    record the reviewed plan + a migration timestamp in the PR (runbook §6).
    **Merge the reviewed PR to `main`** so the reviewed `zones.json` is the tip of
    the branch you will apply from — do not apply from an unmerged or stale ref.
-2. **Protected apply — bound to the reviewed commit.** `terraform-apply`
-   checks out the dispatch ref and **re-plans at dispatch time**, then applies
-   that fresh plan; it does not consume the Day 2 plan artifact. So:
+2. **Protected apply — review the exact plan, then approve.** `terraform-apply`
+   runs two jobs: a `plan` job builds a fresh plan and prints it to the job
+   summary, then a gated `apply` job consumes that saved plan. So:
    - Dispatch `terraform-apply` (`workflow_dispatch`, `confirm=apply`) from the
-     **exact reviewed SHA** (the merge commit from step 1), never a moving
-     branch that may have advanced.
-   - The `production` environment gate pauses the run *before* the plan is
-     produced, so the approver must **read the fresh plan in the run log** and
-     confirm it matches the reviewed plan (same creates, still zero destroys)
-     before approving — intervening Cloudflare drift can change it.
+     **reviewed SHA** (the merge commit from step 1), never a moving branch.
+   - When the run pauses at the `production` environment gate, **read the plan
+     job's summary** and confirm it matches the reviewed plan (same creates,
+     still zero destroys) *before* approving. Because the gate is on the apply
+     job, the plan already exists when you approve, and apply replays that exact
+     plan — Terraform aborts if state drifted, so a stale plan cannot be applied.
    - Capture the `zone_ids` / `zone_count` / `record_count` outputs.
 3. **Verify against the Cloudflare nameservers directly** — *before* any
    registrar change (runbook §8). For each zone, dig the apex A/AAAA, MX, and the

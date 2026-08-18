@@ -236,7 +236,7 @@ def verify_cloudflare_records(
             results.append({"record": key, "error": "dig timed out"})
             all_match = False
             continue
-        comparison = analysis.compare_rrset(exp_values, observed)
+        comparison = analysis.compare_rrset(exp_values, observed, record_type)
         all_match = all_match and comparison["match"]
         results.append({"record": key, "fqdn": fqdn, **comparison})
 

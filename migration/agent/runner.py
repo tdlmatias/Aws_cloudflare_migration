@@ -15,9 +15,10 @@ from typing import Any
 from migration.agent.prompt import SYSTEM_PROMPT
 from migration.agent.tools import ALL_TOOLS
 
-# Default model. Override with MIGRATION_AGENT_MODEL. Kept configurable so the
-# same harness can run cheaper for dry-runs.
-DEFAULT_MODEL = os.environ.get("MIGRATION_AGENT_MODEL", "claude-opus-5")
+# Default model. Override with MIGRATION_AGENT_MODEL. `or` (not a get default)
+# so an env var exported as an empty string — as CI does when the repo variable
+# is unset — still falls back to the default instead of sending a blank model.
+DEFAULT_MODEL = os.environ.get("MIGRATION_AGENT_MODEL") or "claude-opus-5"
 
 
 def run_agent(

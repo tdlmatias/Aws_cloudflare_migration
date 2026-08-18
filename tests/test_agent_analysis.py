@@ -28,10 +28,12 @@ def test_classify_manual_review_flags_blockers() -> None:
     }
     assert len(result["blockers"]) == 1
     assert result["blockers"][0]["reason"] == "invalid_mx"
+    # requires_action = 1 alias + invalid_mx + unsupported_type (skipped_managed excluded)
+    assert len(result["requires_action"]) == 3
     assert result["ready_for_apply"] is False
 
 
-def test_classify_manual_review_ready_when_no_blockers() -> None:
+def test_classify_manual_review_ready_only_managed_items() -> None:
     review = {
         "alias_records": [],
         "review_records": [
@@ -41,6 +43,20 @@ def test_classify_manual_review_ready_when_no_blockers() -> None:
     result = analysis.classify_manual_review(review)
     assert result["ready_for_apply"] is True
     assert result["blockers"] == []
+    assert result["requires_action"] == []
+
+
+def test_classify_manual_review_not_ready_with_unresolved_alias() -> None:
+    # An alias is silently absent from zones.json, so even with no malformed
+    # blockers the export is NOT ready to apply — the operator must map it.
+    review = {
+        "alias_records": [{"zone": "example.com", "name": "@", "type": "A"}],
+        "review_records": [],
+    }
+    result = analysis.classify_manual_review(review)
+    assert result["blockers"] == []
+    assert result["ready_for_apply"] is False
+    assert result["requires_action"][0]["reason"] == "alias_record"
 
 
 def test_zone_record_counts() -> None:
@@ -119,6 +135,28 @@ def test_compare_rrset_normalises_order_case_and_dots() -> None:
     assert missing["match"] is False
     assert missing["missing"] == ["9.9.9.9"]
     assert missing["unexpected"] == []
+
+
+def test_compare_rrset_txt_is_case_sensitive_and_unquotes() -> None:
+    # A DKIM base64 payload differing only in case must NOT match.
+    dkim = analysis.compare_rrset(
+        ["v=DKIM1; k=rsa; p=AbCdEf"],
+        ['"v=DKIM1; k=rsa; p=abcdef"'],
+        "TXT",
+    )
+    assert dkim["match"] is False
+
+    # dig wraps TXT in quotes and splits long records into chunks; unquoting
+    # them should reproduce the stored, concatenated content exactly.
+    spf = analysis.compare_rrset(
+        ["v=spf1 include:_spf.example.com ~all"],
+        ['"v=spf1 include:_spf.example.com ~all"'],
+        "TXT",
+    )
+    assert spf["match"] is True
+
+    split = analysis.compare_rrset(["abcdefghij"], ['"abcde" "fghij"'], "TXT")
+    assert split["match"] is True
 
 
 def test_expected_answers_for_zone_prefixes_mx_priority() -> None:
