@@ -75,11 +75,14 @@ def test_diff_record_counts_detects_missing_zone_and_drop() -> None:
 def test_summarize_terraform_plan_counts_and_flags_destroys() -> None:
     plan = {
         "resource_changes": [
-            {"address": "cloudflare_zone.zones[\"a\"]", "change": {"actions": ["create"]}},
-            {"address": "cloudflare_dns_record.records[\"x\"]", "change": {"actions": ["update"]}},
-            {"address": "cloudflare_dns_record.records[\"y\"]", "change": {"actions": ["delete"]}},
-            {"address": "cloudflare_dns_record.records[\"z\"]", "change": {"actions": ["delete", "create"]}},  # noqa: E501
-            {"address": "cloudflare_dns_record.records[\"n\"]", "change": {"actions": ["no-op"]}},
+            {"address": 'cloudflare_zone.zones["a"]', "change": {"actions": ["create"]}},
+            {"address": 'cloudflare_dns_record.records["x"]', "change": {"actions": ["update"]}},
+            {"address": 'cloudflare_dns_record.records["y"]', "change": {"actions": ["delete"]}},
+            {
+                "address": 'cloudflare_dns_record.records["z"]',
+                "change": {"actions": ["delete", "create"]},
+            },  # noqa: E501
+            {"address": 'cloudflare_dns_record.records["n"]', "change": {"actions": ["no-op"]}},
         ]
     }
     result = analysis.summarize_terraform_plan(plan)
