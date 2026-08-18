@@ -162,13 +162,16 @@ def _normalise_value(value: str, record_type: str, *, is_observed: bool) -> str:
     mismatch into a false match.
 
     The two sides are shaped differently for TXT: the expected value is the
-    already-unquoted content stored in ``zones.json`` (leave it as-is), while the
-    observed ``dig +short`` answer is wrapped in double quotes and long records
-    are split into multiple quoted chunks — so only the observed side is run
-    through :func:`migration.converter.unquote_txt` to reproduce that content.
+    already-unquoted content stored in ``zones.json`` and is compared verbatim —
+    NOT stripped, so a payload with meaningful leading/trailing spaces is not
+    silently equated with one missing them. The observed ``dig +short`` answer is
+    wrapped in double quotes (long records split into multiple quoted chunks), so
+    only the observed side is run through
+    :func:`migration.converter.unquote_txt`; stripping there removes just the
+    presentation whitespace around the quotes, never bytes inside them.
     """
     if record_type == "TXT":
-        return unquote_txt(value.strip()) if is_observed else value.strip()
+        return unquote_txt(value.strip()) if is_observed else value
     return value.strip().rstrip(".").lower()
 
 

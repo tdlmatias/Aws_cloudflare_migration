@@ -83,8 +83,12 @@ surprising destroys), manual-review items resolved.
 2. **Protected apply — review the exact plan, then approve.** `terraform-apply`
    runs two jobs: a `plan` job builds a fresh plan and prints it to the job
    summary, then a gated `apply` job consumes that saved plan. So:
-   - Dispatch `terraform-apply` (`workflow_dispatch`, `confirm=apply`) from the
-     **reviewed SHA** (the merge commit from step 1), never a moving branch.
+   - Dispatch `terraform-apply` (`workflow_dispatch`, `confirm=apply`) against
+     the reviewed commit. `workflow_dispatch` only accepts a **branch or tag**,
+     not a raw SHA, so either dispatch from `main` immediately after the step-1
+     merge (its tip is then the reviewed merge commit) or, safer, tag that commit
+     (e.g. `git tag cutover-2026-08-20 <sha> && git push origin cutover-2026-08-20`)
+     and dispatch from the tag so an intervening push to `main` cannot change it.
    - When the run pauses at the `production` environment gate, **read the plan
      job's summary** and confirm it matches the reviewed plan (same creates,
      still zero destroys) *before* approving. Because the gate is on the apply
@@ -116,11 +120,18 @@ Cut over in the morning so the team is present through the propagation window.
 2. **Monitor** resolution and application/email health as each domain flips.
    `dig NS example.com +short` should begin returning the Cloudflare NS.
 3. **Do not touch Route53.** It remains the rollback target.
-4. **Re-enable DNSSEC (only after the zone verifies clean on Cloudflare).** For
-   each zone you broke DNSSEC on in Day 1 step 5, enable DNSSEC in Cloudflare and
-   publish the **new** Cloudflare DS record at the registrar. Never add the new
-   DS before the nameservers have flipped and resolve correctly, or you
-   re-break the chain.
+4. **Re-enable DNSSEC — in the right order, with a wait.** For each zone you
+   broke DNSSEC on in Day 1 step 5:
+   1. Enable DNSSEC in Cloudflare (this generates the new DS) *after* the zone
+      verifies clean on the Cloudflare nameservers.
+   2. **Wait for the old parent delegation TTL to expire** after the nameserver
+      change before publishing the new DS. One clean query is not enough:
+      resolvers can still have the old Route53 delegation cached, and if such a
+      resolver picks up the new Cloudflare DS while it is still answering from
+      Route53's nameservers, it validates Route53's answers against Cloudflare's
+      key and returns SERVFAIL. Only once the old delegation has aged out
+      everywhere is it safe to publish the new DS at the registrar. (A
+      coordinated multi-signer transition avoids the wait but is more involved.)
 
 Rollback (any time): revert the registrar NS to the recorded Route53 set.
 Recovery speed is bounded by the **parent delegation TTL** (the registry/TLD's
