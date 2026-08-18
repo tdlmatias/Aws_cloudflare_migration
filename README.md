@@ -131,6 +131,7 @@ authoritative during the rollback window.
 * [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — design + diagrams
 * [`docs/MIGRATION_RUNBOOK.md`](docs/MIGRATION_RUNBOOK.md) — step-by-step migration
 * [`docs/CUTOVER_PLAN.md`](docs/CUTOVER_PLAN.md) — dated week-of cutover schedule and go/no-go gates
+* [`docs/AGENT.md`](docs/AGENT.md) — optional AI agent that automates the export/verify steps (capability-gated: no apply/cutover)
 * [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md) — credentials, OIDC, state
 
 ## License

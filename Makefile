@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 TERRAFORM_DIR := terraform
 
-.PHONY: help install format lint typecheck test security validate terraform-test terraform-test-ci export-fixture ci
+.PHONY: help install install-agent agent format lint typecheck test security validate terraform-test terraform-test-ci export-fixture diagram ci
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -12,6 +12,13 @@ help: ## Show this help
 install: ## Install the package with dev dependencies
 	python -m pip install --upgrade pip
 	pip install -e ".[dev]"
+
+install-agent: ## Install the package with the AI migration agent extra
+	python -m pip install --upgrade pip
+	pip install -e ".[agent]"
+
+agent: ## Run the AI migration agent (needs .[agent] + ANTHROPIC_API_KEY)
+	python -m migration.agent $(TASK)
 
 format: ## Auto-format Python and Terraform
 	ruff format .

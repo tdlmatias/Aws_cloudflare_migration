@@ -1,0 +1,85 @@
+name: Migration Agent
+
+# Runs the AI migration assistant on demand. The agent orchestrates the
+# read-only, deterministic steps (export, validate, triage, count-diff, plan
+# summary, DNS verification) and writes a go/no-go report to the job summary.
+#
+# It is capability-gated: the agent has NO tool to run `terraform apply` or to
+# change registrar nameservers, so this workflow cannot mutate production DNS.
+# Those steps remain the human-gated `terraform-apply` workflow + the registrar.
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Instruction for the agent (blank = default export→triage→go/no-go)."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write # required for the read-only AWS OIDC export
+
+concurrency:
+  group: migration-agent
+  cancel-in-progress: true
+
+jobs:
+  agent:
+    name: Run migration agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: export
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[agent]"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          # Same read-only Route53 role the export workflow uses. See
+          # docs/SECURITY_MODEL.md. Update this secret when the AWS account changes.
+          role-to-assume: ${{ secrets.AWS_ROUTE53_READONLY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Run agent
+        id: run
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MIGRATION_AGENT_MODEL: ${{ vars.MIGRATION_AGENT_MODEL }}
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "::error::ANTHROPIC_API_KEY is not set in the 'export' environment; add it to run the agent."
+            exit 1
+          fi
+          python -m migration.agent "${{ github.event.inputs.task }}" | tee agent-report.md
+
+      - name: Publish report to job summary
+        if: always()
+        run: |
+          {
+            echo "## Migration agent report"
+            echo
+            if [ -f agent-report.md ]; then
+              cat agent-report.md
+            else
+              echo "_The agent produced no report (see the step log)._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: migration-agent-report-${{ github.run_id }}
+          path: agent-report.md
+          retention-days: 7
+          if-no-files-found: warn
