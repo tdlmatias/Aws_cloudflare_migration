@@ -1,8 +1,6 @@
-variable "cloudflare_api_token" {
-  type        = string
-  description = "Cloudflare API token with Zone:Edit and DNS:Edit permissions. Prefer the CLOUDFLARE_API_TOKEN environment variable over a .tfvars file."
-  sensitive   = true
-}
+# The Cloudflare API token is intentionally NOT a Terraform variable — it is read
+# from the CLOUDFLARE_API_TOKEN environment variable by the provider, so it never
+# enters the plan file or state. See the provider block in main.tf.
 
 variable "cloudflare_account_id" {
   type        = string

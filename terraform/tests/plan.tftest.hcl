@@ -7,7 +7,6 @@
 mock_provider "cloudflare" {}
 
 variables {
-  cloudflare_api_token  = "test-token"
   cloudflare_account_id = "0123456789abcdef0123456789abcdef"
 }
 

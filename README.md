@@ -78,7 +78,7 @@ python -m migration validate terraform/data/zones.json --schema zones
 
 ```bash
 cp terraform/terraform.tfvars.example terraform/terraform.tfvars   # or use env vars
-export TF_VAR_cloudflare_api_token="<token>"
+export CLOUDFLARE_API_TOKEN="<token>"            # read by the provider, not a TF var
 export TF_VAR_cloudflare_account_id="<32-hex-account-id>"
 
 cd terraform
@@ -130,6 +130,8 @@ authoritative during the rollback window.
 * [`docs/AUDIT_REPORT.md`](docs/AUDIT_REPORT.md) — findings and remediations
 * [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — design + diagrams
 * [`docs/MIGRATION_RUNBOOK.md`](docs/MIGRATION_RUNBOOK.md) — step-by-step migration
+* [`docs/CUTOVER_PLAN.md`](docs/CUTOVER_PLAN.md) — dated week-of cutover schedule and go/no-go gates
+* [`docs/AGENT.md`](docs/AGENT.md) — optional AI agent that automates the export/verify steps (capability-gated: no apply/cutover)
 * [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md) — credentials, OIDC, state
 
 ## License

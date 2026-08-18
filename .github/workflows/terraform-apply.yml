@@ -1,8 +1,17 @@
 name: Terraform Apply
 
-# Production apply is MANUAL ONLY. It never runs on push. It requires a protected
-# GitHub Environment ("production") whose required reviewers must approve the run
-# before any Cloudflare change is made.
+# Production apply is MANUAL ONLY and split into two jobs so a human reviews the
+# EXACT plan that will be applied:
+#
+#   plan  → produces a fresh plan, prints it to the job summary, uploads it.
+#   apply → gated by the protected "production" environment (required reviewers);
+#           the reviewer approves AFTER seeing the plan job's summary, and apply
+#           consumes that saved plan. Terraform refuses a saved plan if state has
+#           drifted since, so an approval can never apply a silently-changed plan.
+#
+# This closes the gap where a single gated job plans and applies back-to-back:
+# there, the environment gate paused before the plan step, so the approver had no
+# fresh plan to review and post-approval drift would be applied unseen.
 on:
   workflow_dispatch:
     inputs:
@@ -14,22 +23,25 @@ on:
 permissions:
   contents: read
 
-# Never run two applies against the same state concurrently.
+# Never run two applies against the same state concurrently. Covers both jobs.
 concurrency:
   group: tf-apply-production
   cancel-in-progress: false
 
 jobs:
-  apply:
-    name: Terraform apply (production)
+  plan:
+    name: Terraform plan (review)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: production
+    timeout-minutes: 20
+    # Read-only Cloudflare token: planning only refreshes/reads state. The gate
+    # lives on the apply job below, not here, so the plan is available to review
+    # BEFORE anyone approves.
+    environment: plan
     steps:
       - name: Validate confirmation input
         run: |
           if [ "${{ github.event.inputs.confirm }}" != "apply" ]; then
-            echo "Confirmation input was not 'apply'; aborting."
+            echo "Confirmation input was not 'apply'; aborting before planning."
             exit 1
           fi
 
@@ -48,17 +60,65 @@ jobs:
       - name: Terraform plan
         working-directory: terraform
         env:
-          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: terraform plan -input=false -lock-timeout=120s -out=tfplan
 
-      # -auto-approve is acceptable here ONLY because the protected environment
-      # gate above already required a human approval before this job could run,
-      # and we apply the exact plan produced immediately above.
+      - name: Render plan to job summary
+        working-directory: terraform
+        run: |
+          {
+            echo "## Terraform plan for review"
+            echo "- Ref: \`${{ github.sha }}\`"
+            echo
+            echo '```'
+            terraform show -no-color tfplan
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: tfplan-${{ github.run_id }}
+          path: terraform/tfplan
+          # The saved plan can contain resource values; keep it briefly.
+          retention-days: 1
+          if-no-files-found: error
+
+  apply:
+    name: Terraform apply (production)
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The protected environment gate pauses HERE — after the plan job published
+    # its plan — so the required reviewer approves the exact reviewed plan.
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Terraform init
+        working-directory: terraform
+        run: terraform init -input=false
+
+      - name: Download reviewed plan
+        uses: actions/download-artifact@v7
+        with:
+          name: tfplan-${{ github.run_id }}
+          path: terraform
+
+      # Applies the saved, reviewed plan — not a fresh one. -auto-approve is safe
+      # only because (a) the production environment gate already required human
+      # approval of that plan, and (b) Terraform aborts if state drifted since.
       - name: Terraform apply
         working-directory: terraform
         env:
-          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: terraform apply -input=false -lock-timeout=120s -auto-approve tfplan
 

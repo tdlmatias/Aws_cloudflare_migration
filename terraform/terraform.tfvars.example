@@ -1,14 +1,15 @@
-# Copy to terraform.tfvars and fill in real values, OR (preferred) supply these
-# through environment variables so secrets never touch the filesystem:
+# Copy to terraform.tfvars and fill in real values, OR (preferred) supply the
+# account id through an environment variable so it never touches the filesystem:
 #
-#   export TF_VAR_cloudflare_api_token="..."      # keep out of shell history
 #   export TF_VAR_cloudflare_account_id="..."
 #
+# The Cloudflare API TOKEN is NOT a Terraform variable — export it directly so
+# the provider reads it and it never lands in the plan file or state:
+#
+#   export CLOUDFLARE_API_TOKEN="..."             # keep out of shell history
+#
 # terraform.tfvars is git-ignored (see .gitignore) and must never be committed.
-# The values below are obvious placeholders, not real credentials.
-
-# Cloudflare API token (Zone:Edit, DNS:Edit). Prefer TF_VAR_/CLOUDFLARE_API_TOKEN.
-cloudflare_api_token = "REPLACE_WITH_CLOUDFLARE_API_TOKEN"
+# The value below is an obvious placeholder, not a real credential.
 
 # 32-character hex Cloudflare account id.
 cloudflare_account_id = "00000000000000000000000000000000"
