@@ -20,7 +20,9 @@ Principles:
 
 ## Recommended AWS OIDC trust policy (export role)
 
-Replace the account id, repo, and branch/ref conditions with your values:
+Replace `<ACCOUNT_ID>` with the AWS account that now holds the hosted zones.
+Keep the repository name in the `sub` condition **exactly as GitHub spells it**
+(`tdlmatias/Aws_cloudflare_migration`, capital `A`):
 
 ```json
 {
@@ -31,11 +33,19 @@ Replace the account id, repo, and branch/ref conditions with your values:
     "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
       "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-      "StringLike": { "token.actions.githubusercontent.com:sub": "repo:tdlmatias/aws_cloudflare_migration:*" }
+      "StringLike": { "token.actions.githubusercontent.com:sub": "repo:tdlmatias/Aws_cloudflare_migration:*" }
     }
   }]
 }
 ```
+
+> **Case sensitivity matters.** GitHub's OIDC token carries the repository's
+> canonical name in the `sub` claim (`repo:tdlmatias/Aws_cloudflare_migration:...`),
+> and IAM `StringLike` conditions are case-sensitive. A trust policy written with
+> a lower-cased repo name will reject the token and the export workflow fails at
+> "Configure AWS credentials" with an unhelpful `Not authorized to perform
+> sts:AssumeRoleWithWebIdentity` error. Tighten `:*` to a specific ref (e.g.
+> `...:ref:refs/heads/main` or `...:environment:export`) once the role works.
 
 ## Minimal IAM permissions (export role)
 

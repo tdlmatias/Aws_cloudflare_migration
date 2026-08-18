@@ -130,6 +130,7 @@ authoritative during the rollback window.
 * [`docs/AUDIT_REPORT.md`](docs/AUDIT_REPORT.md) — findings and remediations
 * [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — design + diagrams
 * [`docs/MIGRATION_RUNBOOK.md`](docs/MIGRATION_RUNBOOK.md) — step-by-step migration
+* [`docs/CUTOVER_PLAN.md`](docs/CUTOVER_PLAN.md) — dated week-of cutover schedule and go/no-go gates
 * [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md) — credentials, OIDC, state
 
 ## License

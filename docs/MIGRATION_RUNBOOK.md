@@ -4,6 +4,9 @@ A step-by-step, safety-first procedure for migrating a set of domains from
 Route53 to Cloudflare. Do not skip the preflight or verification steps — the
 "low/zero downtime" property depends on them.
 
+For a concrete, dated schedule of a single migration week (with go/no-go gates),
+see [`CUTOVER_PLAN.md`](CUTOVER_PLAN.md).
+
 ## 0. Roles and prerequisites
 
 * AWS CLI authenticated with **read-only** Route53 access
@@ -14,6 +17,30 @@ Route53 to Cloudflare. Do not skip the preflight or verification steps — the
 * A configured remote Terraform backend (`terraform/backend.tf` from the example).
 
 ## 1. Preflight (T-48h or earlier)
+
+### 1a. Re-point the export at the current AWS account
+
+Do this whenever the hosted zones live in a **different AWS account** than the
+last export ran against (e.g. after consolidating domains into a new account).
+The tooling has no hardcoded account id — it reaches Route53 only through the
+OIDC role named by the `AWS_ROUTE53_READONLY_ROLE_ARN` secret, so rotating to a
+new account is an IAM + secret change, not a code change:
+
+1. In the **new** AWS account, ensure a GitHub OIDC identity provider exists
+   (`token.actions.githubusercontent.com`, audience `sts.amazonaws.com`).
+2. Create a read-only Route53 role with the trust policy and minimal IAM
+   permissions in `docs/SECURITY_MODEL.md`. Keep the repo name in the trust
+   `sub` **exactly** `tdlmatias/Aws_cloudflare_migration` (capital `A`) — IAM
+   `StringLike` is case-sensitive and a lower-cased name silently rejects the
+   token.
+3. Update the `AWS_ROUTE53_READONLY_ROLE_ARN` secret in the GitHub `export`
+   environment to the new role's ARN.
+4. Run the **Route53 Export** workflow (`workflow_dispatch`) once as a smoke
+   test and confirm the log line `Found N hosted zone(s)` matches the number of
+   domains you moved into the account. If it fails at "Configure AWS
+   credentials", re-check the trust policy `sub` and account id.
+
+### 1b. Prepare for a fast rollback
 
 1. **Lower TTLs** on the records you will migrate in Route53 (e.g. 300s) so a
    rollback propagates quickly. Wait at least the old TTL before cutover.
