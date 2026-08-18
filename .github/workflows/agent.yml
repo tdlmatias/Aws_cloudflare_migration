@@ -79,11 +79,17 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload report artifact
+      - name: Upload report and generated export
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: migration-agent-report-${{ github.run_id }}
-          path: agent-report.md
+          # Include the export the agent generated (when it ran one) so the
+          # reviewed DNS data survives the ephemeral runner and does not have to
+          # be regenerated via the separate export workflow.
+          path: |
+            agent-report.md
+            terraform/data/zones.json
+            terraform/data/manual-review.json
           retention-days: 7
           if-no-files-found: warn

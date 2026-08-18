@@ -47,8 +47,12 @@ Keep the repository name in the `sub` condition **exactly as GitHub spells it**
 > and IAM `StringLike` conditions are case-sensitive. A trust policy written with
 > a lower-cased repo name will reject the token and the export workflow fails at
 > "Configure AWS credentials" with an unhelpful `Not authorized to perform
-> sts:AssumeRoleWithWebIdentity` error. Tighten `:*` to a specific ref (e.g.
-> `...:ref:refs/heads/main` or `...:environment:export`) once the role works.
+> sts:AssumeRoleWithWebIdentity` error. Once the role works, tighten `:*`. The
+> OIDC-enabled jobs (`export.yml`, `agent.yml`) run in the `export` GitHub
+> Environment, so their `sub` is
+> `repo:tdlmatias/Aws_cloudflare_migration:environment:export` — scope to that.
+> A ref form (`...:ref:refs/heads/main`) only matches jobs that do **not**
+> reference an environment, so it would reject these two workflows.
 
 ## Minimal IAM permissions (export role)
 
