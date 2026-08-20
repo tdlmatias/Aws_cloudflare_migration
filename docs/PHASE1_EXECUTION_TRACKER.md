@@ -15,10 +15,19 @@ those for the "why"; use this to record state and pass each go/no-go gate.
 
 ### Conventions
 
-- **In-scope zone count = `N = 12`.** This is the single source of truth for
-  this migration (per the repo scope: "Migration of 12 Domains and DNS
-  Records"). Every "12" / "expect 12" below refers to this `N`; if the in-scope
-  domain set changes, update it here and re-derive the expectations.
+- **In-scope zone count = `N = 12` public zones.** This is the single source of
+  truth for this migration (per the repo scope: "Migration of 12 Domains and DNS
+  Records"). `N` counts the **public, in-scope** zones — the ones that reach
+  `zones.json` and Terraform. Track them as an explicit **named set**, not just a
+  number, so a private-zone exclusion can't be hidden by a count. Every "12"
+  below refers to this `N`; if the in-scope domain set changes, update it here.
+- **Two different denominators — don't gate them against the same number.**
+  `scripts/export_route53.sh` logs `Found N hosted zone(s)` = **every** hosted
+  zone in the account, **including private and out-of-scope** ones. But
+  `convert_hosted_zones()` **omits private zones** from `zones.json` (routed to
+  manual review as `private_hosted_zone`). So the raw account count can be **>
+  12** while `zones.json` is exactly **12**. Gate on the **named public set**:
+  confirm all 12 in-scope domains are present, not that a raw count equals 12.
 - **Field types.** 🎯 marks a **strict expectation** — a mismatch means the
   gate is **HOLD**, not PASS (e.g. `zone_count` must equal `N`; destroys must be
   zero). ✍️ marks an **observed value to record** for later comparison (e.g.
@@ -76,11 +85,16 @@ In the **new** AWS account (the one that now holds the 12 zones):
 
 ### 1.2 Smoke-test the export workflow
 
-Dispatch **Route53 Export** (`workflow_dispatch`). Confirm the log line
-`Found N hosted zone(s)` equals **12**.
+Dispatch **Route53 Export** (`workflow_dispatch`). The `Found N hosted zone(s)`
+log counts **all** hosted zones in the account — public, private, and
+out-of-scope — so `N ≥ 12`; it equals 12 only if the account holds nothing but
+the in-scope public zones. The real check is that **all 12 in-scope public
+domains appear** in the export.
 
 - ✍️ Run URL: 〔 …/actions/runs/____ 〕
-- 🎯 `Found N hosted zone(s)` → N = 〔 __ 〕 (must equal 12)
+- ✍️ `Found N hosted zone(s)` → N = 〔 __ 〕 (raw account total; ≥ 12, may include private/out-of-scope)
+- 🎯 All 12 in-scope public domains present in the export: 〔 __ / 12 〕 (must be 12/12)
+- ✍️ Non-in-scope zones seen (private / out-of-scope), if any: 〔 list 〕
 - 🎯 Result: 〔 green / failed 〕 (must be green)
 
 > If it fails at "Configure AWS credentials": re-check the trust-policy `sub`
@@ -124,8 +138,10 @@ cutover verification — that is Day 4, outside this phase.)
 - Zones needing DNSSEC transition: 〔 list 〕
 - DS removed at parent: 〔 per-zone status 〕
 
-**Gate G1 (end Day 1):** export green against the new account (N = 12); TTLs
-lowered; baseline recorded; DS removed/expiring for every signed zone. → 〔 PASS / HOLD 〕
+**Gate G1 (end Day 1):** export green against the new account with **all 12
+in-scope public domains present** (the raw `Found N` may be higher if the
+account holds private/out-of-scope zones); TTLs lowered; baseline recorded; DS
+removed/expiring for every signed zone. → 〔 PASS / HOLD 〕
 
 ---
 
@@ -139,7 +155,8 @@ terraform/data`) and download the artifact (`zones.json` +
 the diff.
 
 - ✍️ Export run URL: 〔 〕
-- 🎯 Zones in `zones.json`: 〔 __ 〕 (must equal 12)
+- 🎯 Zones in `zones.json` (public only, private excluded): 〔 __ 〕 (must equal the 12 named in-scope domains)
+- ✍️ Reconcile: raw `Found N` 〔 __ 〕 − private/out-of-scope excluded 〔 __ 〕 = `zones.json` count 〔 __ 〕
 
 ### 2.2 Resolve the manual-review report
 
@@ -149,8 +166,14 @@ unsupported types, empty record sets — so Terraform will **not** create them.
 Recording a *decision* is not enough: a decided-but-unimplemented record is a
 DNS record that silently disappears at cutover.
 
-Treat `classify_manual_review`'s **`requires_action`** list as the checklist.
-Every item needs a **recorded disposition** — one of:
+**Blockers first.** `classify_manual_review` flags `BLOCKING_REVIEW_REASONS` —
+**`invalid_mx` _and_ `empty_record_set`** — as malformed input. These are **not**
+dispositionable: they must be fixed at source and re-exported until they no
+longer appear. An `empty_record_set` marked "omitted" or "post-apply" would pass
+this checklist while the classifier still reports a blocker — don't do that.
+
+Everything else in `classify_manual_review`'s **`requires_action`** list is the
+disposition checklist. Each such item needs a **recorded disposition** — one of:
 
 1. **Fold into the reviewed Terraform plan** so `terraform apply` creates it
    (e.g. an alias → a `cloudflare_record` CNAME/origin). Confirm it shows as a
@@ -160,9 +183,6 @@ Every item needs a **recorded disposition** — one of:
    dashboard-only settings. Implemented and verified in **§3.2a**, before G3.
 3. **Explicitly sign off for omission**, by name + who (e.g. a
    `private_hosted_zone` intentionally left behind).
-
-`invalid_mx` (blockers) are the strict subset that **must** be fixed at source
-and re-exported — they can't be dispositioned away.
 
 > **Note on `ready_for_apply`.** `classify_manual_review` takes no sign-off
 > input: it recomputes `requires_action` from every non-managed entry and sets
@@ -175,8 +195,8 @@ and re-exported — they can't be dispositioned away.
 (Table of reasons/actions is in [`MIGRATION_RUNBOOK.md`](MIGRATION_RUNBOOK.md) §3.)
 
 - ✍️ `ready_for_apply` (machine signal): 〔 true / false 〕 — false is fine if all items are dispositioned below
-- 🎯 `invalid_mx` count: 〔 __ 〕 → all fixed & re-exported: 〔 yes / no 〕 (must be yes)
-- 🎯 Every `requires_action` item has a disposition (in-plan / post-apply / omitted): 〔 __ / __ 〕
+- 🎯 Blockers (`invalid_mx` + `empty_record_set`) count: 〔 __ 〕 → all fixed & re-exported to zero: 〔 yes / no 〕 (must be yes)
+- 🎯 Every remaining `requires_action` item has a disposition (in-plan / post-apply / omitted): 〔 __ / __ 〕
 - ✍️ Per-item disposition (item → 1 in-plan / 2 post-apply / 3 omitted-by + who): 〔 list 〕
 - 🎯 Private hosted zones explicitly signed off for exclusion: 〔 yes / no / n-a 〕
 
@@ -200,12 +220,13 @@ this is the current state, so configure those creds first).
 
 ### 2.5 Sanity-check the plan
 
-- 🎯 Zone count == 12: 〔 yes / no 〕
+- 🎯 Zone count == 12 (the named public in-scope set; private already excluded): 〔 yes / no 〕
 - 🎯 Record count ≈ Day-1 baseline sum (✍️ record both): 〔 plan __ vs baseline __ 〕
 - 🎯 **Zero unexpected destroys**: 〔 confirmed 〕
 
-**Gate G2 (end Day 2):** plan shows **creates only**, count ≈ baseline, all
-`invalid_mx` fixed, **and every `requires_action` item carries a recorded
+**Gate G2 (end Day 2):** plan shows **creates only**, count ≈ baseline, **both
+blocker reasons (`invalid_mx` + `empty_record_set`) fixed to zero and
+re-exported**, **and every remaining `requires_action` item carries a recorded
 disposition** — folded into the plan, scheduled as a §3.2a post-apply task, or
 signed off for omission. (Records that need a live zone are *scheduled* here and
 implemented after apply — not required to exist in Cloudflare at G2. Do **not**
