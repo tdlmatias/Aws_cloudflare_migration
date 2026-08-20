@@ -14,6 +14,14 @@ on:
         description: "Instruction for the agent (blank = default export→triage→go/no-go)."
         required: false
         type: string
+      in_scope_file:
+        description: >-
+          Path to an in-scope allowlist (one domain per line) for the agent's
+          export. If the file exists, out-of-scope zones go to manual review.
+          Leave the default and commit that file to enforce scope; clear it to
+          export every public zone.
+        required: false
+        default: "config/in-scope-zones.txt"
 
 permissions:
   contents: read
@@ -55,14 +63,24 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MIGRATION_AGENT_MODEL: ${{ vars.MIGRATION_AGENT_MODEL }}
-          # Pass the dispatch input through the environment (never interpolated
-          # into the script) so shell metacharacters in `task` cannot inject
-          # commands into this step.
+          # Pass the dispatch inputs through the environment (never interpolated
+          # into the script) so shell metacharacters cannot inject commands.
           TASK: ${{ github.event.inputs.task }}
+          IN_SCOPE_FILE_INPUT: ${{ github.event.inputs.in_scope_file }}
         run: |
           if [ -z "${ANTHROPIC_API_KEY}" ]; then
             echo "::error::ANTHROPIC_API_KEY is not set in the 'export' environment; add it to run the agent."
             exit 1
+          fi
+          # Same fail-closed allowlist wiring as the export workflow: a
+          # non-empty-but-missing path is an error, not a silent full migration.
+          if [ -n "${IN_SCOPE_FILE_INPUT}" ]; then
+            if [ ! -f "${IN_SCOPE_FILE_INPUT}" ]; then
+              echo "::error::in_scope_file '${IN_SCOPE_FILE_INPUT}' not found. Commit that file, or clear the input to export every public zone."
+              exit 1
+            fi
+            export IN_SCOPE_ZONES_FILE="${IN_SCOPE_FILE_INPUT}"
+            echo "::notice::Agent export will enforce the in-scope allowlist from ${IN_SCOPE_FILE_INPUT}."
           fi
           python -m migration.agent "$TASK" | tee agent-report.md
 

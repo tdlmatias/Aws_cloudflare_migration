@@ -1,12 +1,20 @@
 name: STAGING
 
 # Satisfies the branch-protection rule "Require deployments to succeed before
-# merging" for the STAGING environment. It runs on pull requests to main and
-# performs non-destructive Terraform validation only (no apply, no secrets),
-# so the STAGING deployment reliably succeeds without touching infrastructure.
+# merging" for the STAGING environment. It performs non-destructive Terraform
+# validation only (no apply, no secrets), so the STAGING deployment reliably
+# succeeds without touching infrastructure.
+#
+# Triggered on `push` (not `pull_request`) on purpose: the "require deployments"
+# rule evaluates deployments on the PR's head commit, but a pull_request-event
+# job records its environment deployment against the synthetic merge ref, so the
+# gate never sees an active deployment on the head and merging stays blocked.
+# A push-event job runs with github.sha == the branch head, so the STAGING
+# deployment lands exactly on the commit the gate checks. main is excluded
+# because it is never merged into itself.
 on:
-  pull_request:
-    branches:
+  push:
+    branches-ignore:
       - main
 
 permissions:

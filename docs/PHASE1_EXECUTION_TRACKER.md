@@ -165,8 +165,8 @@ terraform/data`) and download the artifact (`zones.json` +
 the diff.
 
 - ✍️ Export run URL: 〔 〕
-- ✍️ Reconcile: raw `Found N` 〔 __ 〕 − private zones 〔 __ 〕 − `out_of_scope_zone` entries 〔 __ 〕 = zones in `zones.json` 〔 __ 〕
-  - *With the §2.1a allowlist applied, out-of-scope public zones are dropped to `manual-review.json` as `out_of_scope_zone`, so subtract them too; the result should equal 12. Without the allowlist, that term is 0 and any extra public zone stays in `zones.json` — prune per §2.1a.*
+- ✍️ Reconcile from the **`manual-review.json` reason counts** (each excluded zone appears under exactly one reason, so they don't overlap): raw `Found N` 〔 __ 〕 − `private_hosted_zone` entries 〔 __ 〕 − `out_of_scope_zone` entries 〔 __ 〕 = zones in `zones.json` 〔 __ 〕
+  - *Count zone-level exclusions from the report, not from your own head-count: the converter checks the allowlist **before** the private-zone check, so a private zone that isn't on the allowlist is emitted once as `out_of_scope_zone` (not `private_hosted_zone`) — counting it under both would double-subtract. With the §2.1a allowlist the result should equal 12; without it, `out_of_scope_zone` is 0 and any extra public zone stays in `zones.json` (prune per §2.1a).*
 - 🎯 `zones.json` zone set == the 12 named in-scope domains, **no extras**: 〔 yes / no 〕
 - ✍️ Zones excluded as `out_of_scope_zone` (allowlist) / extras still to prune: 〔 list / none 〕
 

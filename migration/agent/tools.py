@@ -14,6 +14,7 @@ structured data rather than scraping prose.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -44,7 +45,7 @@ def _resolve(path: str) -> Path:
 
 
 @beta_tool
-def run_route53_export(output_dir: str = "terraform/data") -> str:
+def run_route53_export(output_dir: str = "terraform/data", in_scope_file: str | None = None) -> str:
     """Run the read-only Route53 export and report zone/record counts.
 
     Shells out to scripts/export_route53.sh, which needs the AWS CLI
@@ -56,10 +57,28 @@ def run_route53_export(output_dir: str = "terraform/data") -> str:
         output_dir: Directory (relative to the repo root unless absolute) where
             zones.json and manual-review.json are written. Defaults to
             terraform/data.
+        in_scope_file: Optional path (relative to the repo root unless absolute)
+            to an in-scope allowlist, one domain per line. When set — or when the
+            IN_SCOPE_ZONES_FILE environment variable is set — hosted zones
+            outside the list are routed to manual review as ``out_of_scope_zone``
+            instead of migrated, matching the export workflow. A named-but-missing
+            path is an error (fail closed) rather than a silent full migration.
     """
     script = REPO_ROOT / "scripts" / "export_route53.sh"
     if not script.exists():
         return _err(f"export script not found at {script}")
+
+    # Honor an explicit arg first, else an ambient IN_SCOPE_ZONES_FILE. A
+    # named-but-missing allowlist fails closed so scope enforcement is never
+    # silently skipped on this alternative export path.
+    allowlist = in_scope_file or os.environ.get("IN_SCOPE_ZONES_FILE")
+    env = dict(os.environ)
+    if allowlist:
+        allowlist_path = _resolve(allowlist)
+        if not allowlist_path.is_file():
+            return _err(f"in_scope_file not found: {allowlist_path}")
+        env["IN_SCOPE_ZONES_FILE"] = str(allowlist_path)
+
     if shutil.which("aws") is None:
         return _err("the 'aws' CLI is not installed or not on PATH; cannot export Route53")
 
@@ -71,6 +90,7 @@ def run_route53_export(output_dir: str = "terraform/data") -> str:
             text=True,
             timeout=600,
             cwd=REPO_ROOT,
+            env=env,
         )
     except subprocess.TimeoutExpired:
         return _err("export timed out after 600s")

@@ -55,11 +55,18 @@ jobs:
         env:
           IN_SCOPE_FILE_INPUT: ${{ github.event.inputs.in_scope_file }}
         run: |
-          if [ -n "${IN_SCOPE_FILE_INPUT}" ] && [ -f "${IN_SCOPE_FILE_INPUT}" ]; then
+          # A non-empty in_scope_file expresses intent to enforce scope, so a
+          # missing/mistyped path must FAIL rather than silently migrate every
+          # zone. Only an explicitly blank input opts out of the allowlist.
+          if [ -n "${IN_SCOPE_FILE_INPUT}" ]; then
+            if [ ! -f "${IN_SCOPE_FILE_INPUT}" ]; then
+              echo "::error::in_scope_file '${IN_SCOPE_FILE_INPUT}' not found. Commit that file, or clear the input to migrate every public zone."
+              exit 1
+            fi
             export IN_SCOPE_ZONES_FILE="${IN_SCOPE_FILE_INPUT}"
             echo "::notice::Enforcing in-scope allowlist from ${IN_SCOPE_FILE_INPUT}; out-of-scope zones go to manual review."
           else
-            echo "::notice::No in-scope allowlist file at '${IN_SCOPE_FILE_INPUT:-<none>}'; migrating every public zone."
+            echo "::notice::in_scope_file is blank; migrating every public zone (no scope allowlist)."
           fi
           ./scripts/export_route53.sh terraform/data
 
