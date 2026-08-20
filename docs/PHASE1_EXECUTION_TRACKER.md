@@ -143,14 +143,25 @@ the diff.
 
 ### 2.2 Resolve the manual-review report
 
-Open `manual-review.json`. Every `invalid_mx` **must** be fixed at source and
-re-exported before apply. Decide the Cloudflare equivalent for aliases, routing
-policies, and CAA/SRV; confirm private hosted zones are intentionally left
-behind. (Table of reasons/actions is in [`MIGRATION_RUNBOOK.md`](MIGRATION_RUNBOOK.md) §3.)
+Open `manual-review.json`. The converter (`convert_record_set`) **omits** every
+manual-review record from `zones.json` — aliases, routing policies, CAA/SRV,
+unsupported types, empty record sets — so Terraform will **not** create them.
+Recording a *decision* is not enough: a decided-but-unimplemented record is a
+DNS record that silently disappears at cutover.
 
-- `invalid_mx` count: 〔 __ 〕 → all fixed & re-exported: 〔 yes / no 〕
-- Aliases / routing / CAA / SRV decisions recorded: 〔 yes / no 〕
-- Private hosted zones intentionally excluded: 〔 yes / no 〕
+Treat `classify_manual_review`'s **`requires_action`** list as the gate. Each
+item must be either (a) **implemented and verified** in Cloudflare (add the
+CNAME/origin for an alias, the structured `data` block for CAA/SRV, etc.), or
+(b) **explicitly signed off for omission** by name (e.g. a private hosted zone
+that is intentionally left behind). `invalid_mx` items are the strict subset
+that **must** be fixed at source and re-exported. The target state is
+**`ready_for_apply: true`** (i.e. `requires_action` empty after sign-off).
+(Table of reasons/actions is in [`MIGRATION_RUNBOOK.md`](MIGRATION_RUNBOOK.md) §3.)
+
+- 🎯 `invalid_mx` count: 〔 __ 〕 → all fixed & re-exported: 〔 yes / no 〕 (must be yes)
+- 🎯 Every other `requires_action` item implemented **or** signed off for omission: 〔 __ / __ 〕
+- ✍️ Per-item disposition (implemented / omitted-by + who): 〔 list 〕
+- 🎯 Private hosted zones explicitly signed off for exclusion: 〔 yes / no 〕
 
 ### 2.3 Validate
 
@@ -177,7 +188,9 @@ this is the current state, so configure those creds first).
 - 🎯 **Zero unexpected destroys**: 〔 confirmed 〕
 
 **Gate G2 (end Day 2):** plan shows **creates only**, count ≈ baseline, all
-`invalid_mx` fixed. → 〔 PASS / HOLD 〕
+`invalid_mx` fixed, **and every `requires_action` manual-review item is
+implemented or explicitly signed off for omission** (`ready_for_apply: true`) —
+not merely "decided". → 〔 PASS / HOLD 〕
 
 ---
 
@@ -214,8 +227,22 @@ gated `apply` job (protected `production` environment, required reviewer).
 
 ### 3.3 Verify against the Cloudflare nameservers directly (before any registrar change)
 
-For each zone, dig the apex A/AAAA, MX, and the mail TXT trio explicitly on the
-zone's assigned Cloudflare NS:
+**Verify _every_ migrated record per zone, not just the apex.** A zone can pass
+an apex-only spot check while an auto-migrated subdomain A/AAAA/CNAME/TXT/NS
+record is missing or wrong — and that broken hostname only surfaces after the
+registrar cutover, when it is hardest to fix.
+
+**Primary check — full per-zone verification.** Run the repo's
+`verify_cloudflare_records` (agent tool, `migration/agent/tools.py`), which digs
+**every unproxied entry in `zones.json`** against the zone's Cloudflare NS and
+reports unresolved proxied entries separately. The gate is its
+**`fully_verified: true`** (from `verification_passed()`: at least one record
+verified, all verified records match, and no proxied record left unattested) —
+**not** a bare `all_match`, which is vacuously true for an all-proxied zone.
+Proxied records (`skipped_proxied`) must be attested another way (e.g. Cloudflare
+dashboard) — they never count as verified by origin parity.
+
+**Manual spot check (apex + mail), in addition — not instead of:**
 
 ```bash
 dig @<cloudflare-ns> example.com A +short
@@ -225,22 +252,23 @@ dig @<cloudflare-ns> _dmarc.example.com TXT +short
 dig @<cloudflare-ns> <selector>._domainkey.example.com TXT +short   # DKIM
 ```
 
-Do not treat this phase as done until answers match the intended state on every
-zone. (Proxied records won't match origin content — verify those another way,
-per the agent's `skipped_proxied` handling.)
+A zone is "clean" only when **every** record in its `zones.json` entry is
+accounted for — verified by origin parity or explicitly attested if proxied.
 
-- 🎯 Zones verified clean on Cloudflare NS: 〔 __ / 12 〕 (must be 12/12 to pass G3)
+- 🎯 Zones with `fully_verified: true` (all records, not apex-only): 〔 __ / 12 〕 (must be 12/12)
+- ✍️ Proxied records attested another way (per zone): 〔 list / n-a 〕
 
 **Gate G3 (end Day 3):** reviewed PR merged; apply dispatched from that
-SHA/tag and the fresh in-run plan re-confirmed at the approval gate; every zone
-verified correct on its Cloudflare NS; **Route53 still untouched and
+SHA/tag and the fresh in-run plan re-confirmed at the approval gate; **every
+migrated record** on every zone verified (`fully_verified: true`, proxied
+entries attested) — not just apex/mail; **Route53 still untouched and
 authoritative**. → 〔 PASS / HOLD 〕
 
 ---
 
 ## Phase 1 exit
 
-- [ ] All 12 zones exist in Cloudflare and resolve correctly on their Cloudflare NS.
+- [ ] All 12 zones exist in Cloudflare and are `fully_verified` (every migrated record, not apex-only) on their Cloudflare NS.
 - [ ] Route53 unchanged and still authoritative (no registrar NS change made).
 - [ ] Outputs and verification recorded above.
 - [ ] Cutover (Day 4) scheduled as a **separate** change — not part of this phase.
