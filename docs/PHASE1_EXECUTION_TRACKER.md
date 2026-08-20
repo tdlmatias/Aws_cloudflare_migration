@@ -149,19 +149,36 @@ unsupported types, empty record sets — so Terraform will **not** create them.
 Recording a *decision* is not enough: a decided-but-unimplemented record is a
 DNS record that silently disappears at cutover.
 
-Treat `classify_manual_review`'s **`requires_action`** list as the gate. Each
-item must be either (a) **implemented and verified** in Cloudflare (add the
-CNAME/origin for an alias, the structured `data` block for CAA/SRV, etc.), or
-(b) **explicitly signed off for omission** by name (e.g. a private hosted zone
-that is intentionally left behind). `invalid_mx` items are the strict subset
-that **must** be fixed at source and re-exported. The target state is
-**`ready_for_apply: true`** (i.e. `requires_action` empty after sign-off).
+Treat `classify_manual_review`'s **`requires_action`** list as the checklist.
+Every item needs a **recorded disposition** — one of:
+
+1. **Fold into the reviewed Terraform plan** so `terraform apply` creates it
+   (e.g. an alias → a `cloudflare_record` CNAME/origin). Confirm it shows as a
+   planned *create* in §2.5.
+2. **Schedule as a post-apply manual task** when the record needs a live zone
+   that does not exist until the Day-3 apply — CAA/SRV structured `data` blocks,
+   dashboard-only settings. Implemented and verified in **§3.2a**, before G3.
+3. **Explicitly sign off for omission**, by name + who (e.g. a
+   `private_hosted_zone` intentionally left behind).
+
+`invalid_mx` (blockers) are the strict subset that **must** be fixed at source
+and re-exported — they can't be dispositioned away.
+
+> **Note on `ready_for_apply`.** `classify_manual_review` takes no sign-off
+> input: it recomputes `requires_action` from every non-managed entry and sets
+> `ready_for_apply = not requires_action`. So `ready_for_apply` is `true` **only
+> when the export contains no non-managed review items at all** — record it, but
+> it will (correctly) stay `false` whenever there is any intentional exclusion
+> such as a private zone. **G2 does not require `ready_for_apply: true`;** it
+> requires every `requires_action` item to carry a disposition (1–3 above), with
+> the human sign-off recorded here since the classifier cannot represent it.
 (Table of reasons/actions is in [`MIGRATION_RUNBOOK.md`](MIGRATION_RUNBOOK.md) §3.)
 
+- ✍️ `ready_for_apply` (machine signal): 〔 true / false 〕 — false is fine if all items are dispositioned below
 - 🎯 `invalid_mx` count: 〔 __ 〕 → all fixed & re-exported: 〔 yes / no 〕 (must be yes)
-- 🎯 Every other `requires_action` item implemented **or** signed off for omission: 〔 __ / __ 〕
-- ✍️ Per-item disposition (implemented / omitted-by + who): 〔 list 〕
-- 🎯 Private hosted zones explicitly signed off for exclusion: 〔 yes / no 〕
+- 🎯 Every `requires_action` item has a disposition (in-plan / post-apply / omitted): 〔 __ / __ 〕
+- ✍️ Per-item disposition (item → 1 in-plan / 2 post-apply / 3 omitted-by + who): 〔 list 〕
+- 🎯 Private hosted zones explicitly signed off for exclusion: 〔 yes / no / n-a 〕
 
 ### 2.3 Validate
 
@@ -188,9 +205,11 @@ this is the current state, so configure those creds first).
 - 🎯 **Zero unexpected destroys**: 〔 confirmed 〕
 
 **Gate G2 (end Day 2):** plan shows **creates only**, count ≈ baseline, all
-`invalid_mx` fixed, **and every `requires_action` manual-review item is
-implemented or explicitly signed off for omission** (`ready_for_apply: true`) —
-not merely "decided". → 〔 PASS / HOLD 〕
+`invalid_mx` fixed, **and every `requires_action` item carries a recorded
+disposition** — folded into the plan, scheduled as a §3.2a post-apply task, or
+signed off for omission. (Records that need a live zone are *scheduled* here and
+implemented after apply — not required to exist in Cloudflare at G2. Do **not**
+gate on `ready_for_apply: true`; see the note in §2.2.) → 〔 PASS / HOLD 〕
 
 ---
 
@@ -225,6 +244,17 @@ gated `apply` job (protected `production` environment, required reviewer).
 - ✍️ Apply run URL: 〔 〕 · 🎯 plan re-confirmed at gate: 〔 yes 〕
 - 🎯 `zone_count` = 〔 __ 〕 (must equal 12) · ✍️ `record_count` = 〔 __ 〕 (record; compare to baseline)
 
+### 3.2a Implement the scheduled post-apply manual records (before G3)
+
+The apply in §3.2 created the `cloudflare_zone` resources, so the zones now
+exist. Implement every manual-review item dispositioned as **"post-apply"** in
+§2.2 (CAA/SRV `data` blocks, alias → CNAME/origin, dashboard-only settings) and
+verify each one. Items dispositioned **"in-plan"** were already created by the
+apply; items **"omitted"** are intentionally skipped.
+
+- 🎯 Post-apply manual records implemented & verified: 〔 __ / __ 〕
+- ✍️ Per-item: 〔 record → implemented + verified how 〕
+
 ### 3.3 Verify against the Cloudflare nameservers directly (before any registrar change)
 
 **Verify _every_ migrated record per zone, not just the apex.** A zone can pass
@@ -235,12 +265,26 @@ registrar cutover, when it is hardest to fix.
 **Primary check — full per-zone verification.** Run the repo's
 `verify_cloudflare_records` (agent tool, `migration/agent/tools.py`), which digs
 **every unproxied entry in `zones.json`** against the zone's Cloudflare NS and
-reports unresolved proxied entries separately. The gate is its
-**`fully_verified: true`** (from `verification_passed()`: at least one record
-verified, all verified records match, and no proxied record left unattested) —
-**not** a bare `all_match`, which is vacuously true for an all-proxied zone.
-Proxied records (`skipped_proxied`) must be attested another way (e.g. Cloudflare
-dashboard) — they never count as verified by origin parity.
+reports proxied entries separately as `skipped_proxied`.
+
+The per-zone pass rule depends on whether the zone has proxied records:
+
+- **Zone with no proxied records** → require **`fully_verified: true`** (from
+  `verification_passed()`: at least one record verified, all verified records
+  match, and `skipped_proxied` count is zero). Not a bare `all_match`, which is
+  vacuously true for an all-proxied zone.
+- **Zone with proxied records** → `verification_passed()` returns `false` **by
+  design** (it fails whenever `skipped_proxied` is nonzero, and the tool has no
+  attestation input), so `fully_verified` is unreachable and must **not** be the
+  gate. Instead require the **composite**: every **unproxied** record verified by
+  origin parity (the tool's `all_match` over the unproxied set) **and** every
+  `skipped_proxied` record **attested** another way (Cloudflare dashboard /
+  proxied-aware check), recorded per item below.
+
+> Making a single machine signal cover proxied zones — extending
+> `verify_cloudflare_records`/`verification_passed()` to accept a recorded
+> attestation for `skipped_proxied` records — is a reasonable code follow-up, but
+> this phase gates on the composite above and does not require that change.
 
 **Manual spot check (apex + mail), in addition — not instead of:**
 
@@ -253,22 +297,23 @@ dig @<cloudflare-ns> <selector>._domainkey.example.com TXT +short   # DKIM
 ```
 
 A zone is "clean" only when **every** record in its `zones.json` entry is
-accounted for — verified by origin parity or explicitly attested if proxied.
+accounted for — verified by origin parity, or explicitly attested if proxied.
 
-- 🎯 Zones with `fully_verified: true` (all records, not apex-only): 〔 __ / 12 〕 (must be 12/12)
-- ✍️ Proxied records attested another way (per zone): 〔 list / n-a 〕
+- 🎯 Zones passing the per-zone rule (`fully_verified`, **or** unproxied-verified + proxied-attested): 〔 __ / 12 〕 (must be 12/12)
+- ✍️ Proxied records attested per zone (record → how attested): 〔 list / n-a 〕
 
 **Gate G3 (end Day 3):** reviewed PR merged; apply dispatched from that
-SHA/tag and the fresh in-run plan re-confirmed at the approval gate; **every
-migrated record** on every zone verified (`fully_verified: true`, proxied
-entries attested) — not just apex/mail; **Route53 still untouched and
-authoritative**. → 〔 PASS / HOLD 〕
+SHA/tag and the fresh in-run plan re-confirmed at the approval gate; all §3.2a
+post-apply manual records implemented & verified; **every migrated record** on
+every zone verified per the §3.3 per-zone rule (`fully_verified`, or
+unproxied-verified + proxied-attested) — not just apex/mail; **Route53 still
+untouched and authoritative**. → 〔 PASS / HOLD 〕
 
 ---
 
 ## Phase 1 exit
 
-- [ ] All 12 zones exist in Cloudflare and are `fully_verified` (every migrated record, not apex-only) on their Cloudflare NS.
+- [ ] All 12 zones exist in Cloudflare and pass the §3.3 per-zone verification rule (every migrated record verified or proxied-attested, not apex-only) on their Cloudflare NS.
 - [ ] Route53 unchanged and still authoritative (no registrar NS change made).
 - [ ] Outputs and verification recorded above.
 - [ ] Cutover (Day 4) scheduled as a **separate** change — not part of this phase.
