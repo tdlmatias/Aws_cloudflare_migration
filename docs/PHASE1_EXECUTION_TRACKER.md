@@ -3,7 +3,8 @@
 **Scope of this phase:** build and verify the Cloudflare zones for the 12
 in-scope domains, up to and including the protected `terraform apply`, and
 verify resolution on the Cloudflare nameservers. **No registrar cutover in this
-phase** — Route53 stays authoritative and untouched throughout.
+phase** — Route53 stays authoritative and rollback-capable throughout, with no
+record changes other than the planned Day-1 TTL reductions.
 
 This is the operational tracker that sits on top of
 [`CUTOVER_PLAN.md`](CUTOVER_PLAN.md) (the dated schedule) and
@@ -93,9 +94,30 @@ In the **new** AWS account (the one that now holds the 12 zones):
 - Role ARN recorded in `export` env secret: 〔 yes / no 〕
 - Trust `sub` scoped to `...:environment:export`: 〔 yes / no 〕
 
+### 1.1a Commit the in-scope allowlist (before the smoke test)
+
+Do this **now**, not on Day 2: the export workflow's `in_scope_file` input
+defaults to `config/in-scope-zones.txt` and **fails closed** if that path is set
+but missing. On a fresh checkout only `config/in-scope-zones.txt.example` exists,
+so the §1.2 smoke test would error before it ever queries Route53. Either:
+
+- **Recommended:** copy the example, list your 12 domains, and commit it — then
+  every export (Day 1 onward) is scope-enforced:
+  ```bash
+  cp config/in-scope-zones.txt.example config/in-scope-zones.txt
+  $EDITOR config/in-scope-zones.txt && git add config/in-scope-zones.txt && git commit
+  ```
+- **Or**, for an unscoped smoke test only, dispatch §1.2 with the `in_scope_file`
+  input **cleared** (blank) — every public zone is exported and you reconcile by
+  hand per §2.1a.
+
+- 🎯 `config/in-scope-zones.txt` committed with the 12 domains, **or** decision to run §1.2 unscoped recorded: 〔 committed / unscoped 〕
+
 ### 1.2 Smoke-test the export workflow
 
-Dispatch **Route53 Export** (`workflow_dispatch`). The `Found N hosted zone(s)`
+Dispatch **Route53 Export** (`workflow_dispatch`), leaving the `in_scope_file`
+input at its default once §1.1a is committed (or blank for an unscoped run). The
+`Found N hosted zone(s)`
 log counts **all** hosted zones in the account — public, private, and
 out-of-scope — so `N ≥ 12`; it equals 12 only if the account holds nothing but
 the in-scope public zones. The real check is that **all 12 in-scope public
@@ -373,14 +395,15 @@ SHA/tag and the fresh in-run plan re-confirmed at the approval gate; all §3.2a
 post-apply manual records implemented & verified; **every migrated record** on
 every zone verified per the §3.3 per-zone rule (`fully_verified`, or
 unproxied-verified + proxied-attested) — not just apex/mail; **Route53 still
-untouched and authoritative**. → 〔 PASS / HOLD 〕
+authoritative and rollback-capable — no record changes beyond the Day-1 TTL
+reductions, and no registrar NS change**. → 〔 PASS / HOLD 〕
 
 ---
 
 ## Phase 1 exit
 
 - [ ] All 12 zones exist in Cloudflare and pass the §3.3 per-zone verification rule (every migrated record verified or proxied-attested, not apex-only) on their Cloudflare NS.
-- [ ] Route53 unchanged and still authoritative (no registrar NS change made).
+- [ ] Route53 still authoritative and rollback-capable — only the Day-1 TTL reductions changed, no registrar NS change made.
 - [ ] Outputs and verification recorded above.
 - [ ] Cutover (Day 4) scheduled as a **separate** change — not part of this phase.
 
