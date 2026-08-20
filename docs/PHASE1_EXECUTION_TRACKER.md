@@ -23,11 +23,18 @@ those for the "why"; use this to record state and pass each go/no-go gate.
   below refers to this `N`; if the in-scope domain set changes, update it here.
 - **Two different denominators — don't gate them against the same number.**
   `scripts/export_route53.sh` logs `Found N hosted zone(s)` = **every** hosted
-  zone in the account, **including private and out-of-scope** ones. But
-  `convert_hosted_zones()` **omits private zones** from `zones.json` (routed to
-  manual review as `private_hosted_zone`). So the raw account count can be **>
-  12** while `zones.json` is exactly **12**. Gate on the **named public set**:
-  confirm all 12 in-scope domains are present, not that a raw count equals 12.
+  zone in the account, **including private and out-of-scope** ones.
+  `convert_hosted_zones()` drops **only private** zones (routed to manual review
+  as `private_hosted_zone`) — **it has no in-scope allowlist**, so every
+  **public** zone in the export lands in `zones.json`, in-scope or not. So both
+  the raw account count *and* `zones.json` can exceed 12: the raw count by any
+  private or extra public zone, `zones.json` by any **extra public** zone.
+- **The set is the gate, not a count.** Confirm `zones.json`'s zone set is
+  **exactly the 12 named in-scope domains** — no missing ones, and no extras. An
+  out-of-scope public zone is **not** filtered by the tooling; it must be pruned
+  before planning (see §2.1a) or it enters the plan and creates an unintended
+  Cloudflare zone. (Adding a scope allowlist to the export/converter is a
+  reasonable code follow-up.)
 - **Field types.** 🎯 marks a **strict expectation** — a mismatch means the
   gate is **HOLD**, not PASS (e.g. `zone_count` must equal `N`; destroys must be
   zero). ✍️ marks an **observed value to record** for later comparison (e.g.
@@ -155,8 +162,20 @@ terraform/data`) and download the artifact (`zones.json` +
 the diff.
 
 - ✍️ Export run URL: 〔 〕
-- 🎯 Zones in `zones.json` (public only, private excluded): 〔 __ 〕 (must equal the 12 named in-scope domains)
-- ✍️ Reconcile: raw `Found N` 〔 __ 〕 − private/out-of-scope excluded 〔 __ 〕 = `zones.json` count 〔 __ 〕
+- ✍️ Reconcile: raw `Found N` 〔 __ 〕 − private zones (auto-dropped) 〔 __ 〕 = public zones in `zones.json` 〔 __ 〕
+- 🎯 `zones.json` zone set == the 12 named in-scope domains, **no extras**: 〔 yes / no 〕
+- ✍️ Extra public zones present (out-of-scope, NOT auto-filtered — must prune in §2.1a): 〔 list / none 〕
+
+### 2.1a Scope the export to the 12 in-scope domains
+
+The converter drops private zones but **not** out-of-scope public zones, so any
+extra public zone in the export will otherwise enter the plan. Reconcile
+`zones.json`'s zone set against the 12 named domains and remove extras before
+planning — prefer limiting the export/account to the in-scope zones; otherwise
+delete the extra zone objects from `zones.json` and re-validate.
+
+- 🎯 `zones.json` contains exactly the 12 named zones after pruning: 〔 yes / no 〕
+- ✍️ Zones pruned (name → why out of scope): 〔 list / none 〕
 
 ### 2.2 Resolve the manual-review report
 
@@ -220,14 +239,14 @@ this is the current state, so configure those creds first).
 
 ### 2.5 Sanity-check the plan
 
-- 🎯 Zone count == 12 (the named public in-scope set; private already excluded): 〔 yes / no 〕
+- 🎯 Plan creates **exactly the 12 named in-scope zones** — no missing, no extra (§2.1a pruning done): 〔 yes / no 〕
 - 🎯 Record count ≈ Day-1 baseline sum (✍️ record both): 〔 plan __ vs baseline __ 〕
 - 🎯 **Zero unexpected destroys**: 〔 confirmed 〕
 
-**Gate G2 (end Day 2):** plan shows **creates only**, count ≈ baseline, **both
-blocker reasons (`invalid_mx` + `empty_record_set`) fixed to zero and
-re-exported**, **and every remaining `requires_action` item carries a recorded
-disposition** — folded into the plan, scheduled as a §3.2a post-apply task, or
+**Gate G2 (end Day 2):** plan shows **creates only** for **exactly the 12 named
+in-scope zones** (extras pruned per §2.1a), count ≈ baseline, **both blocker
+reasons (`invalid_mx` + `empty_record_set`) fixed to zero and re-exported**,
+**and every remaining `requires_action` item carries a recorded disposition** — folded into the plan, scheduled as a §3.2a post-apply task, or
 signed off for omission. (Records that need a live zone are *scheduled* here and
 implemented after apply — not required to exist in Cloudflare at G2. Do **not**
 gate on `ready_for_apply: true`; see the note in §2.2.) → 〔 PASS / HOLD 〕
