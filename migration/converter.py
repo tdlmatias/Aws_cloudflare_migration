@@ -374,6 +374,7 @@ def convert_hosted_zones(
     record_sets_by_zone_id: dict[str, list[dict[str, Any]]],
     *,
     allow_private_zones: bool = False,
+    in_scope_zones: set[str] | None = None,
 ) -> ConversionResult:
     """Convert every hosted zone into the deterministic migration document.
 
@@ -382,13 +383,40 @@ def convert_hosted_zones(
         ``ResourceRecordSets`` list.
     :param allow_private_zones: private hosted zones must not be migrated into a
         public Cloudflare zone; by default they are routed to manual review.
+    :param in_scope_zones: an optional allowlist of in-scope domain names. When
+        provided, any hosted zone whose name is not in the allowlist is routed
+        to manual review (reason ``out_of_scope_zone``) instead of being
+        migrated — the converter otherwise has no notion of scope and would
+        migrate every public zone in the export. Names are compared
+        case-insensitively and ignoring a trailing dot. ``None`` (the default)
+        disables the filter and preserves the previous behaviour.
     """
     result = ConversionResult()
+    allowlist = (
+        {strip_trailing_dot(name).lower() for name in in_scope_zones}
+        if in_scope_zones is not None
+        else None
+    )
 
     for zone in sorted(hosted_zones, key=lambda z: strip_trailing_dot(z.get("Name", ""))):
         zone_id = zone["Id"].split("/")[-1]
         zone_name = strip_trailing_dot(zone["Name"])
         is_private = bool(zone.get("Config", {}).get("PrivateZone", False))
+
+        if allowlist is not None and zone_name.lower() not in allowlist:
+            result.review_records.append(
+                {
+                    "zone": zone_name,
+                    "name": "@",
+                    "type": "ZONE",
+                    "reason": "out_of_scope_zone",
+                    "detail": (
+                        "Hosted zone is not in the in-scope allowlist; not "
+                        "migrated. Add it to the allowlist to include it."
+                    ),
+                }
+            )
+            continue
 
         if is_private and not allow_private_zones:
             result.review_records.append(

@@ -31,10 +31,11 @@ those for the "why"; use this to record state and pass each go/no-go gate.
   private or extra public zone, `zones.json` by any **extra public** zone.
 - **The set is the gate, not a count.** Confirm `zones.json`'s zone set is
   **exactly the 12 named in-scope domains** — no missing ones, and no extras. An
-  out-of-scope public zone is **not** filtered by the tooling; it must be pruned
-  before planning (see §2.1a) or it enters the plan and creates an unintended
-  Cloudflare zone. (Adding a scope allowlist to the export/converter is a
-  reasonable code follow-up.)
+  out-of-scope public zone is not migrated **only if** you pass the in-scope
+  allowlist (`--in-scope-file` / `--in-scope-zone`, or `IN_SCOPE_ZONES_FILE` for
+  the export script); without it, an extra public zone enters the plan and
+  creates an unintended Cloudflare zone. Apply the allowlist and validate the
+  set — see §2.1a.
 - **Field types.** 🎯 marks a **strict expectation** — a mismatch means the
   gate is **HOLD**, not PASS (e.g. `zone_count` must equal `N`; destroys must be
   zero). ✍️ marks an **observed value to record** for later comparison (e.g.
@@ -168,14 +169,32 @@ the diff.
 
 ### 2.1a Scope the export to the 12 in-scope domains
 
-The converter drops private zones but **not** out-of-scope public zones, so any
-extra public zone in the export will otherwise enter the plan. Reconcile
-`zones.json`'s zone set against the 12 named domains and remove extras before
-planning — prefer limiting the export/account to the in-scope zones; otherwise
-delete the extra zone objects from `zones.json` and re-validate.
+By default the converter drops private zones but **not** out-of-scope public
+zones, so any extra public zone in the export would otherwise enter the plan.
+**Enforce scope with the in-scope allowlist** so this is handled by the tooling
+rather than by hand: any zone not on the list is routed to manual review as
+`out_of_scope_zone` instead of migrated.
 
-- 🎯 `zones.json` contains exactly the 12 named zones after pruning: 〔 yes / no 〕
-- ✍️ Zones pruned (name → why out of scope): 〔 list / none 〕
+```bash
+# One domain per line (# comments and blank lines ignored):
+printf '%s\n' domain1.com domain2.com … domain12.com > in-scope.txt
+
+# Export workflow / script: point it at the file
+IN_SCOPE_ZONES_FILE=in-scope.txt ./scripts/export_route53.sh terraform/data
+
+# Or directly on the converter:
+python -m migration convert --zones … --records-dir … \
+  --output zones.json --review-output manual-review.json \
+  --in-scope-file in-scope.txt        # or repeat --in-scope-zone domain.com
+```
+
+Then confirm `zones.json`'s zone set is exactly the 12 named domains; the
+excluded zones appear in `manual-review.json` as `out_of_scope_zone` for the
+audit trail. (If you don't use the allowlist, reconcile by hand and delete extra
+zone objects from `zones.json` before planning.)
+
+- 🎯 `zones.json` contains exactly the 12 named zones (allowlist applied): 〔 yes / no 〕
+- ✍️ Zones excluded as `out_of_scope_zone` (name → why out of scope): 〔 list / none 〕
 
 ### 2.2 Resolve the manual-review report
 

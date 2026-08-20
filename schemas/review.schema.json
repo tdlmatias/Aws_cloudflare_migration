@@ -43,7 +43,8 @@
               "unsupported_type",
               "invalid_mx",
               "empty_record_set",
-              "private_hosted_zone"
+              "private_hosted_zone",
+              "out_of_scope_zone"
             ]
           },
           "detail": { "type": "string" }

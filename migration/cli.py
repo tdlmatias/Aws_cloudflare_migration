@@ -34,6 +34,23 @@ def _load_record_sets(records_dir: Path, hosted_zones: list[dict]) -> dict[str, 
     return mapping
 
 
+def _load_in_scope_zones(args: argparse.Namespace) -> set[str] | None:
+    """Build the in-scope allowlist from --in-scope-zone / --in-scope-file.
+
+    Returns ``None`` when neither option is given (filter disabled). A file
+    lists one domain per line; blank lines and ``#`` comments are ignored.
+    """
+    if args.in_scope_file is None and not args.in_scope_zone:
+        return None
+    names: set[str] = set(args.in_scope_zone or [])
+    if args.in_scope_file is not None:
+        for line in args.in_scope_file.read_text(encoding="utf-8").splitlines():
+            entry = line.split("#", 1)[0].strip()
+            if entry:
+                names.add(entry)
+    return names
+
+
 def cmd_convert(args: argparse.Namespace) -> int:
     hosted_zones = read_json(args.zones)["HostedZones"]
     record_sets = _load_record_sets(args.records_dir, hosted_zones)
@@ -42,6 +59,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
         hosted_zones,
         record_sets,
         allow_private_zones=args.allow_private_zones,
+        in_scope_zones=_load_in_scope_zones(args),
     )
 
     zones_doc = result.zones_document()
@@ -95,6 +113,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--allow-private-zones",
         action="store_true",
         help="Migrate private hosted zones instead of routing them to review (unsafe).",
+    )
+    convert.add_argument(
+        "--in-scope-zone",
+        action="append",
+        metavar="DOMAIN",
+        help="In-scope domain (repeatable). When any --in-scope-zone/--in-scope-file "
+        "is given, hosted zones outside the allowlist are routed to review "
+        "(out_of_scope_zone) instead of migrated.",
+    )
+    convert.add_argument(
+        "--in-scope-file",
+        type=Path,
+        metavar="PATH",
+        help="File of in-scope domains, one per line (# comments and blanks ignored).",
     )
     convert.add_argument(
         "--no-validate",

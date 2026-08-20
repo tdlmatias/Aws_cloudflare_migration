@@ -68,6 +68,16 @@ Writes `terraform/data/zones.json` (Terraform input) and
 `terraform/data/manual-review.json` (aliases, routing policies, unsupported
 records, private zones). Review the report before continuing.
 
+To restrict the migration to a known set of domains, pass an in-scope allowlist
+— any hosted zone not on the list is routed to review as `out_of_scope_zone`
+instead of migrated (the converter otherwise migrates every public zone in the
+export):
+
+```bash
+IN_SCOPE_ZONES_FILE=in-scope.txt ./scripts/export_route53.sh terraform/data
+# or on the converter directly: --in-scope-file in-scope.txt / --in-scope-zone example.com
+```
+
 ## 2. Dry run / validate
 
 ```bash

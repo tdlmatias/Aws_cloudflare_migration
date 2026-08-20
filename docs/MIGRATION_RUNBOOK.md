@@ -70,6 +70,7 @@ Open `terraform/data/manual-review.json`. For each entry:
 | `structured_data_required` (CAA/SRV) | Add manually in Cloudflare or extend Terraform. |
 | `unsupported_type` | Recreate manually if still needed. |
 | `private_hosted_zone` | Do **not** migrate to public Cloudflare. |
+| `out_of_scope_zone` | Zone excluded by the in-scope allowlist (`--in-scope-file`/`--in-scope-zone`). Confirm the exclusion is intended; add it to the allowlist and re-export to include it. |
 | alias records | Map to a Cloudflare CNAME/origin. |
 
 ## 4. Validate

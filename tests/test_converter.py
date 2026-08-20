@@ -210,6 +210,56 @@ def test_private_zone_included_when_allowed(fixture_dir) -> None:
     assert not any(r["reason"] == "private_hosted_zone" for r in result.review_records)
 
 
+def _public_zone(zone_id: str, name: str) -> dict:
+    return {"Id": f"/hostedzone/{zone_id}", "Name": name, "Config": {"PrivateZone": False}}
+
+
+def test_out_of_scope_public_zone_routed_to_review() -> None:
+    hosted = [
+        _public_zone("Z1IN0000000000000", "example.com."),
+        _public_zone("Z2OUT000000000000", "extra.com."),
+    ]
+    result = convert_hosted_zones(hosted, {}, in_scope_zones={"example.com"})
+    zone_names = {z["name"] for z in result.zones}
+    assert zone_names == {"example.com"}
+    assert "extra.com" not in zone_names
+    out = [r for r in result.review_records if r["reason"] == "out_of_scope_zone"]
+    assert [r["zone"] for r in out] == ["extra.com"]
+
+
+def test_allowlist_none_migrates_every_public_zone() -> None:
+    hosted = [
+        _public_zone("Z1IN0000000000000", "example.com."),
+        _public_zone("Z2OUT000000000000", "extra.com."),
+    ]
+    result = convert_hosted_zones(hosted, {}, in_scope_zones=None)
+    assert {z["name"] for z in result.zones} == {"example.com", "extra.com"}
+    assert not any(r["reason"] == "out_of_scope_zone" for r in result.review_records)
+
+
+def test_allowlist_matches_case_insensitively_and_ignores_trailing_dot() -> None:
+    hosted = [_public_zone("Z1IN0000000000000", "Example.COM.")]
+    result = convert_hosted_zones(hosted, {}, in_scope_zones={"example.com."})
+    assert {z["name"] for z in result.zones} == {"Example.COM"}
+    assert not any(r["reason"] == "out_of_scope_zone" for r in result.review_records)
+
+
+def test_in_scope_private_zone_still_routed_to_private_review() -> None:
+    hosted = [
+        {
+            "Id": "/hostedzone/Z9PRIVATE00000000",
+            "Name": "internal.example.",
+            "Config": {"PrivateZone": True},
+        }
+    ]
+    # Even though the zone is in the allowlist, a private zone must not be
+    # migrated into a public Cloudflare zone.
+    result = convert_hosted_zones(hosted, {}, in_scope_zones={"internal.example"})
+    assert result.zones == []
+    reasons = {r["reason"] for r in result.review_records}
+    assert reasons == {"private_hosted_zone"}
+
+
 def test_conversion_is_deterministic(fixture_dir) -> None:
     from migration.io import read_json
 

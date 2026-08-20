@@ -63,11 +63,21 @@ while IFS= read -r zone_id; do
 done < <(jq -r '.HostedZones[].Id' "${hosted_zones_file}")
 
 log "Converting to ${out_dir}/zones.json"
+# Optional in-scope allowlist: set IN_SCOPE_ZONES_FILE to a file of one domain
+# per line to route any hosted zone outside the list to manual review instead
+# of migrating it. Unset means migrate every (non-private) public zone.
+convert_args=()
+if [ -n "${IN_SCOPE_ZONES_FILE:-}" ]; then
+  [ -f "${IN_SCOPE_ZONES_FILE}" ] || die "IN_SCOPE_ZONES_FILE not found: ${IN_SCOPE_ZONES_FILE}"
+  convert_args+=(--in-scope-file "${IN_SCOPE_ZONES_FILE}")
+  log "Restricting migration to in-scope zones from ${IN_SCOPE_ZONES_FILE}"
+fi
 PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" python3 -m migration convert \
   --zones "${hosted_zones_file}" \
   --records-dir "${work_dir}" \
   --output "${work_dir}/zones.json" \
-  --review-output "${work_dir}/manual-review.json"
+  --review-output "${work_dir}/manual-review.json" \
+  ${convert_args[@]+"${convert_args[@]}"}
 
 # Publish only after a fully successful export + conversion.
 mkdir -p "${out_dir}"
