@@ -13,6 +13,18 @@ those for the "why"; use this to record state and pass each go/no-go gate.
 > Fill in the `〔 〕` placeholders as you go. Keep this file updated in the PR so
 > the second reviewer sees live state.
 
+### Conventions
+
+- **In-scope zone count = `N = 12`.** This is the single source of truth for
+  this migration (per the repo scope: "Migration of 12 Domains and DNS
+  Records"). Every "12" / "expect 12" below refers to this `N`; if the in-scope
+  domain set changes, update it here and re-derive the expectations.
+- **Field types.** 🎯 marks a **strict expectation** — a mismatch means the
+  gate is **HOLD**, not PASS (e.g. `zone_count` must equal `N`; destroys must be
+  zero). ✍️ marks an **observed value to record** for later comparison (e.g.
+  baseline record counts, run URLs, nameservers) — recording it never fails a
+  gate by itself, but it feeds a 🎯 check downstream.
+
 ---
 
 ## 0. Readiness snapshot (verified by tooling review)
@@ -67,9 +79,9 @@ In the **new** AWS account (the one that now holds the 12 zones):
 Dispatch **Route53 Export** (`workflow_dispatch`). Confirm the log line
 `Found N hosted zone(s)` equals **12**.
 
-- Run URL: 〔 …/actions/runs/____ 〕
-- `Found N hosted zone(s)` → N = 〔 __ 〕 (expect 12)
-- Result: 〔 green / failed 〕
+- ✍️ Run URL: 〔 …/actions/runs/____ 〕
+- 🎯 `Found N hosted zone(s)` → N = 〔 __ 〕 (must equal 12)
+- 🎯 Result: 〔 green / failed 〕 (must be green)
 
 > If it fails at "Configure AWS credentials": re-check the trust-policy `sub`
 > and the account id.
@@ -126,8 +138,8 @@ terraform/data`) and download the artifact (`zones.json` +
 `manual-review.json`). The export is **not** auto-committed — a human reviews
 the diff.
 
-- Export run URL: 〔 〕
-- Zones in `zones.json`: 〔 __ 〕 (expect 12)
+- ✍️ Export run URL: 〔 〕
+- 🎯 Zones in `zones.json`: 〔 __ 〕 (must equal 12)
 
 ### 2.2 Resolve the manual-review report
 
@@ -160,9 +172,9 @@ this is the current state, so configure those creds first).
 
 ### 2.5 Sanity-check the plan
 
-- Zone count == 12: 〔 yes / no 〕
-- Record count ≈ Day-1 baseline sum: 〔 plan __ vs baseline __ 〕
-- **Zero unexpected destroys**: 〔 confirmed 〕
+- 🎯 Zone count == 12: 〔 yes / no 〕
+- 🎯 Record count ≈ Day-1 baseline sum (✍️ record both): 〔 plan __ vs baseline __ 〕
+- 🎯 **Zero unexpected destroys**: 〔 confirmed 〕
 
 **Gate G2 (end Day 2):** plan shows **creates only**, count ≈ baseline, all
 `invalid_mx` fixed. → 〔 PASS / HOLD 〕
@@ -197,8 +209,8 @@ gated `apply` job (protected `production` environment, required reviewer).
    cannot be applied.
 3. Capture outputs: `zone_count`, `record_count`, `zone_ids`.
 
-- Apply run URL: 〔 〕 · plan re-confirmed at gate: 〔 yes 〕
-- `zone_count` = 〔 12 〕 · `record_count` = 〔 __ 〕
+- ✍️ Apply run URL: 〔 〕 · 🎯 plan re-confirmed at gate: 〔 yes 〕
+- 🎯 `zone_count` = 〔 __ 〕 (must equal 12) · ✍️ `record_count` = 〔 __ 〕 (record; compare to baseline)
 
 ### 3.3 Verify against the Cloudflare nameservers directly (before any registrar change)
 
@@ -217,7 +229,7 @@ Do not treat this phase as done until answers match the intended state on every
 zone. (Proxied records won't match origin content — verify those another way,
 per the agent's `skipped_proxied` handling.)
 
-- Zones verified clean on Cloudflare NS: 〔 __ / 12 〕
+- 🎯 Zones verified clean on Cloudflare NS: 〔 __ / 12 〕 (must be 12/12 to pass G3)
 
 **Gate G3 (end Day 3):** reviewed PR merged; apply dispatched from that
 SHA/tag and the fresh in-run plan re-confirmed at the approval gate; every zone
