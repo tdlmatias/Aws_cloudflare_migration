@@ -27,7 +27,7 @@ from typing import Any
 # Bump the MINOR version for backwards-compatible additions to the emitted
 # document and the MAJOR version for breaking changes. schemas/zones.schema.json
 # and schemas/review.schema.json are versioned in lock-step.
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 
 # Record types converted directly into Cloudflare DNS records.
 DIRECT_TYPES = frozenset({"A", "AAAA", "CNAME", "TXT", "MX", "NS"})

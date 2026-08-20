@@ -1,0 +1,23 @@
+# In-scope domains for the Route53 -> Cloudflare migration, one per line.
+# Lines starting with '#' and blank lines are ignored. Matching is
+# case-insensitive and ignores a trailing dot.
+#
+# Copy this file to config/in-scope-zones.txt and commit it, then run the
+# Route53 Export workflow (or ./scripts/export_route53.sh with
+# IN_SCOPE_ZONES_FILE=config/in-scope-zones.txt). Any hosted zone in the account
+# that is NOT listed here is routed to manual review as `out_of_scope_zone`
+# instead of being migrated.
+#
+# Replace the placeholders below with the 12 real in-scope domains.
+# domain1.com
+# domain2.com
+# domain3.com
+# domain4.com
+# domain5.com
+# domain6.com
+# domain7.com
+# domain8.com
+# domain9.com
+# domain10.com
+# domain11.com
+# domain12.com

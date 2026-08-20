@@ -176,16 +176,20 @@ rather than by hand: any zone not on the list is routed to manual review as
 `out_of_scope_zone` instead of migrated.
 
 ```bash
-# One domain per line (# comments and blank lines ignored):
-printf '%s\n' domain1.com domain2.com … domain12.com > in-scope.txt
+# Commit the 12 in-scope domains, one per line (see config/in-scope-zones.txt.example):
+cp config/in-scope-zones.txt.example config/in-scope-zones.txt
+$EDITOR config/in-scope-zones.txt      # list the 12 real domains, then commit
 
-# Export workflow / script: point it at the file
-IN_SCOPE_ZONES_FILE=in-scope.txt ./scripts/export_route53.sh terraform/data
+# Route53 Export workflow: the in_scope_file input defaults to
+# config/in-scope-zones.txt — if that file exists, scope is enforced automatically.
+
+# Local script:
+IN_SCOPE_ZONES_FILE=config/in-scope-zones.txt ./scripts/export_route53.sh terraform/data
 
 # Or directly on the converter:
 python -m migration convert --zones … --records-dir … \
   --output zones.json --review-output manual-review.json \
-  --in-scope-file in-scope.txt        # or repeat --in-scope-zone domain.com
+  --in-scope-file config/in-scope-zones.txt   # or repeat --in-scope-zone domain.com
 ```
 
 Then confirm `zones.json`'s zone set is exactly the 12 named domains; the

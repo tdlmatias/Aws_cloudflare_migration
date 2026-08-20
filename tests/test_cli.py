@@ -28,7 +28,7 @@ def test_convert_writes_valid_documents(fixture_dir, tmp_path, capsys) -> None:
     assert _convert(fixture_dir, tmp_path) == 0
     zones = json.loads((tmp_path / "zones.json").read_text())
     review = json.loads((tmp_path / "manual-review.json").read_text())
-    assert zones["schema_version"] == "1.0.0"
+    assert zones["schema_version"] == "1.1.0"
     assert any(z["name"] == "example.com" for z in zones["zones"])
     assert review["review_records"]  # unsupported / routing / structured items present
     # The user-facing manual-review note is written to stderr.

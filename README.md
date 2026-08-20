@@ -74,8 +74,10 @@ instead of migrated (the converter otherwise migrates every public zone in the
 export):
 
 ```bash
-IN_SCOPE_ZONES_FILE=in-scope.txt ./scripts/export_route53.sh terraform/data
-# or on the converter directly: --in-scope-file in-scope.txt / --in-scope-zone example.com
+# Commit config/in-scope-zones.txt (see config/in-scope-zones.txt.example). The
+# Route53 Export workflow's in_scope_file input defaults to that path.
+IN_SCOPE_ZONES_FILE=config/in-scope-zones.txt ./scripts/export_route53.sh terraform/data
+# or on the converter directly: --in-scope-file config/in-scope-zones.txt / --in-scope-zone example.com
 ```
 
 ## 2. Dry run / validate

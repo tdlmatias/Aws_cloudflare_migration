@@ -6,6 +6,14 @@ name: Route53 Export
 # reviews the diff before it reaches Terraform.
 on:
   workflow_dispatch:
+    inputs:
+      in_scope_file:
+        description: >-
+          Path to a file of in-scope domains (one per line). If the file exists,
+          hosted zones outside it are routed to manual review instead of
+          migrated. Leave the default and commit that file to enforce scope.
+        required: false
+        default: "config/in-scope-zones.txt"
 
 permissions:
   contents: read
@@ -44,7 +52,16 @@ jobs:
           aws-region: us-east-1
 
       - name: Export Route53
-        run: ./scripts/export_route53.sh terraform/data
+        env:
+          IN_SCOPE_FILE_INPUT: ${{ github.event.inputs.in_scope_file }}
+        run: |
+          if [ -n "${IN_SCOPE_FILE_INPUT}" ] && [ -f "${IN_SCOPE_FILE_INPUT}" ]; then
+            export IN_SCOPE_ZONES_FILE="${IN_SCOPE_FILE_INPUT}"
+            echo "::notice::Enforcing in-scope allowlist from ${IN_SCOPE_FILE_INPUT}; out-of-scope zones go to manual review."
+          else
+            echo "::notice::No in-scope allowlist file at '${IN_SCOPE_FILE_INPUT:-<none>}'; migrating every public zone."
+          fi
+          ./scripts/export_route53.sh terraform/data
 
       - name: Upload export artifact
         uses: actions/upload-artifact@v7
