@@ -24,11 +24,13 @@ those for the "why"; use this to record state and pass each go/no-go gate.
 - **Two different denominators — don't gate them against the same number.**
   `scripts/export_route53.sh` logs `Found N hosted zone(s)` = **every** hosted
   zone in the account, **including private and out-of-scope** ones.
-  `convert_hosted_zones()` drops **only private** zones (routed to manual review
-  as `private_hosted_zone`) — **it has no in-scope allowlist**, so every
-  **public** zone in the export lands in `zones.json`, in-scope or not. So both
-  the raw account count *and* `zones.json` can exceed 12: the raw count by any
-  private or extra public zone, `zones.json` by any **extra public** zone.
+  By default `convert_hosted_zones()` drops **only private** zones (routed to
+  review as `private_hosted_zone`) and migrates **every public** zone, in-scope
+  or not — so without an allowlist both the raw account count *and* `zones.json`
+  can exceed 12. Passing the **in-scope allowlist** (§2.1a) additionally routes
+  every non-listed zone to review as `out_of_scope_zone`, so `zones.json` then
+  holds exactly the 12 listed domains while the raw account count may still be
+  higher.
 - **The set is the gate, not a count.** Confirm `zones.json`'s zone set is
   **exactly the 12 named in-scope domains** — no missing ones, and no extras. An
   out-of-scope public zone is not migrated **only if** you pass the in-scope
@@ -163,9 +165,10 @@ terraform/data`) and download the artifact (`zones.json` +
 the diff.
 
 - ✍️ Export run URL: 〔 〕
-- ✍️ Reconcile: raw `Found N` 〔 __ 〕 − private zones (auto-dropped) 〔 __ 〕 = public zones in `zones.json` 〔 __ 〕
+- ✍️ Reconcile: raw `Found N` 〔 __ 〕 − private zones 〔 __ 〕 − `out_of_scope_zone` entries 〔 __ 〕 = zones in `zones.json` 〔 __ 〕
+  - *With the §2.1a allowlist applied, out-of-scope public zones are dropped to `manual-review.json` as `out_of_scope_zone`, so subtract them too; the result should equal 12. Without the allowlist, that term is 0 and any extra public zone stays in `zones.json` — prune per §2.1a.*
 - 🎯 `zones.json` zone set == the 12 named in-scope domains, **no extras**: 〔 yes / no 〕
-- ✍️ Extra public zones present (out-of-scope, NOT auto-filtered — must prune in §2.1a): 〔 list / none 〕
+- ✍️ Zones excluded as `out_of_scope_zone` (allowlist) / extras still to prune: 〔 list / none 〕
 
 ### 2.1a Scope the export to the 12 in-scope domains
 
